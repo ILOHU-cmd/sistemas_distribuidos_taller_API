@@ -1,0 +1,113 @@
+### Evidencia real de app/clients contra servicio_inestable.py
+### Arranque: python servicio_inestable.py --semilla 42 --tasa-fallos 0.4
+### Fecha: 2026-10-21T10:43:40-05:00
+
+===== LOGS DEL CLIENTE =====
+2026-10-21 10:43:41,005 INFO httpx: HTTP Request: GET http://127.0.0.1:9000/salud "HTTP/1.1 200 OK"
+2026-10-21 10:43:41,009 INFO httpx: HTTP Request: GET http://127.0.0.1:9000/sensores/S-002/lectura "HTTP/1.1 503 Service Unavailable"
+2026-10-21 10:43:41,009 INFO app.clients.unstable_service: intento 1/5, causa=503, espera=0.170s, origen=backoff
+2026-10-21 10:43:41,010 INFO httpx: HTTP Request: GET http://127.0.0.1:9000/sensores/S-003/lectura "HTTP/1.1 503 Service Unavailable"
+2026-10-21 10:43:41,011 INFO app.clients.unstable_service: intento 1/5, causa=503, espera=0.308s, origen=backoff
+2026-10-21 10:43:41,013 INFO httpx: HTTP Request: GET http://127.0.0.1:9000/sensores/S-999/lectura "HTTP/1.1 404 Not Found"
+2026-10-21 10:43:41,321 INFO httpx: HTTP Request: GET http://127.0.0.1:9000/sensores/S-003/lectura "HTTP/1.1 503 Service Unavailable"
+2026-10-21 10:43:41,322 INFO app.clients.unstable_service: intento 2/5, causa=503, espera=0.564s, origen=backoff
+2026-10-21 10:43:41,888 INFO httpx: HTTP Request: GET http://127.0.0.1:9000/sensores/S-003/lectura "HTTP/1.1 429 Too Many Requests"
+2026-10-21 10:43:41,888 INFO app.clients.unstable_service: intento 3/5, causa=429, espera=2.000s, origen=Retry-After
+2026-10-21 10:43:43,008 INFO app.clients.unstable_service: intento 1/5, causa=timeout, espera=0.375s, origen=backoff
+2026-10-21 10:43:43,184 INFO app.clients.unstable_service: intento 2/5, causa=timeout, espera=0.927s, origen=backoff
+2026-10-21 10:43:43,891 INFO httpx: HTTP Request: GET http://127.0.0.1:9000/sensores/S-001/lectura "HTTP/1.1 503 Service Unavailable"
+2026-10-21 10:43:43,891 INFO app.clients.unstable_service: intento 2/5, causa=503, espera=0.423s, origen=backoff
+2026-10-21 10:43:44,114 INFO httpx: HTTP Request: GET http://127.0.0.1:9000/sensores/S-002/lectura "HTTP/1.1 503 Service Unavailable"
+2026-10-21 10:43:44,114 INFO app.clients.unstable_service: intento 3/5, causa=503, espera=1.622s, origen=backoff
+2026-10-21 10:43:44,317 INFO httpx: HTTP Request: GET http://127.0.0.1:9000/sensores/S-001/lectura "HTTP/1.1 200 OK"
+2026-10-21 10:43:45,739 INFO httpx: HTTP Request: GET http://127.0.0.1:9000/sensores/S-002/lectura "HTTP/1.1 503 Service Unavailable"
+2026-10-21 10:43:45,740 INFO app.clients.unstable_service: intento 4/5, causa=503, espera=3.909s, origen=backoff
+2026-10-21 10:43:45,892 INFO app.clients.unstable_service: intento 4/5, causa=timeout, espera=3.839s, origen=backoff
+2026-10-21 10:43:49,655 INFO httpx: HTTP Request: GET http://127.0.0.1:9000/sensores/S-002/lectura "HTTP/1.1 200 OK"
+2026-10-21 10:43:49,733 INFO httpx: HTTP Request: GET http://127.0.0.1:9000/sensores/S-003/lectura "HTTP/1.1 429 Too Many Requests"
+2026-10-21 10:43:51,737 INFO httpx: HTTP Request: GET http://127.0.0.1:9000/sensores "HTTP/1.1 200 OK"
+2026-10-21 10:43:51,738 INFO httpx: HTTP Request: GET http://127.0.0.1:9000/sensores?cursor=bzo1 "HTTP/1.1 503 Service Unavailable"
+2026-10-21 10:43:51,739 INFO app.clients.unstable_service: intento 1/5, causa=503, espera=0.348s, origen=backoff
+2026-10-21 10:43:52,089 INFO httpx: HTTP Request: GET http://127.0.0.1:9000/sensores?cursor=bzo1 "HTTP/1.1 503 Service Unavailable"
+2026-10-21 10:43:52,090 INFO app.clients.unstable_service: intento 2/5, causa=503, espera=0.999s, origen=backoff
+2026-10-21 10:43:53,091 INFO httpx: HTTP Request: GET http://127.0.0.1:9000/sensores?cursor=bzo1 "HTTP/1.1 200 OK"
+2026-10-21 10:43:53,093 INFO httpx: HTTP Request: GET http://127.0.0.1:9000/sensores?cursor=bzoxMA%3D%3D "HTTP/1.1 429 Too Many Requests"
+2026-10-21 10:43:53,093 INFO app.clients.unstable_service: intento 1/5, causa=429, espera=2.000s, origen=Retry-After
+2026-10-21 10:43:55,096 INFO httpx: HTTP Request: GET http://127.0.0.1:9000/sensores?cursor=bzoxMA%3D%3D "HTTP/1.1 429 Too Many Requests"
+2026-10-21 10:43:55,097 INFO app.clients.unstable_service: intento 2/5, causa=429, espera=2.000s, origen=Retry-After
+2026-10-21 10:43:57,100 INFO httpx: HTTP Request: GET http://127.0.0.1:9000/sensores?cursor=bzoxMA%3D%3D "HTTP/1.1 200 OK"
+2026-10-21 10:43:57,103 INFO httpx: HTTP Request: GET http://127.0.0.1:9000/sensores?cursor=bzoxNQ%3D%3D "HTTP/1.1 200 OK"
+2026-10-21 10:43:57,105 INFO httpx: HTTP Request: GET http://127.0.0.1:9000/sensores?cursor=bzoyMA%3D%3D "HTTP/1.1 200 OK"
+2026-10-21 10:43:57,106 INFO httpx: HTTP Request: GET http://127.0.0.1:9000/sensores/S-001/lectura "HTTP/1.1 503 Service Unavailable"
+2026-10-21 10:43:57,107 INFO app.clients.unstable_service: intento 1/5, causa=503, espera=0.289s, origen=backoff
+2026-10-21 10:43:57,399 INFO httpx: HTTP Request: GET http://127.0.0.1:9000/sensores/S-001/lectura "HTTP/1.1 200 OK"
+== /salud ==
+salud: True
+
+== obtener_lecturas (degradacion parcial con un sensor inexistente) ==
+  lecturas ok: 2  fallidos: 2
+  ok: {'sensor_id': 'S-001', 'tipo': 'temperatura', 'valor': 28.3, 'unidad': '°C', 'marca_tiempo': '2026-10-21T15:43:44+00:00'}
+  ok: {'sensor_id': 'S-002', 'tipo': 'ruido', 'valor': 74.2, 'unidad': 'dB', 'marca_tiempo': '2026-10-21T15:43:49+00:00'}
+  fallido: {'sensor_id': 'S-003', 'motivo': 'El servicio inestable sigue devolviendo 429 tras 5 intentos'}
+  fallido: {'sensor_id': 'S-999', 'motivo': 'No existe el sensor S-999'}
+
+== listar_sensores (recorre toda la paginacion) ==
+total sensores: 23
+  S-001 Edificio A
+  S-002 Edificio B
+  S-003 Edificio B
+  S-004 Cafetería
+  S-005 Biblioteca
+  S-006 Edificio A
+  S-007 Edificio A
+  S-008 Edificio B
+  S-009 Biblioteca
+  S-010 Cafetería
+  S-011 Edificio B
+  S-012 Biblioteca
+  S-013 Auditorio
+  S-014 Auditorio
+  S-015 Cafetería
+  S-016 Laboratorio 1
+  S-017 Edificio B
+  S-018 Auditorio
+  S-019 Edificio A
+  S-020 Laboratorio 2
+  S-021 Laboratorio 1
+  S-022 Biblioteca
+  S-023 Auditorio
+
+== obtener_lectura (un sensor puntual) ==
+  lectura: {'sensor_id': 'S-001', 'tipo': 'temperatura', 'valor': 27.5, 'unidad': '°C', 'marca_tiempo': '2026-10-21T15:43:57+00:00'}
+
+===== LOGS DEL SERVICIO INESTABLE =====
+Servicio inestable en http://127.0.0.1:9000       (documentación en /docs)
+Parámetros: {'tasa_fallos': 0.4, 'tasa_429': 0.1, 'tasa_lentitud': 0.2, 'latencia_s': 4.0, 'retry_after_s': 2, 'semilla': 42, 'tam_pagina': 5, 'num_sensores': 23}
+[10:43:41.007]       127.0.0.1 GET /sensores/S-001/lectura -> lenta (4.0 s)
+[10:43:41.009]       127.0.0.1 GET /sensores/S-002/lectura -> 503
+[10:43:41.009]       127.0.0.1 GET /sensores/S-003/lectura -> 503
+[10:43:41.012]       127.0.0.1 GET /sensores/S-999/lectura -> 404
+[10:43:41.182]       127.0.0.1 GET /sensores/S-002/lectura -> lenta (4.0 s)
+[10:43:41.321]       127.0.0.1 GET /sensores/S-003/lectura -> 503
+[10:43:41.888]       127.0.0.1 GET /sensores/S-003/lectura -> 429 (Retry-After: 2)
+[10:43:43.890]       127.0.0.1 GET /sensores/S-001/lectura -> 503
+[10:43:43.891]       127.0.0.1 GET /sensores/S-003/lectura -> lenta (4.0 s)
+[10:43:44.114]       127.0.0.1 GET /sensores/S-002/lectura -> 503
+[10:43:44.316]       127.0.0.1 GET /sensores/S-001/lectura -> 200
+[10:43:45.008]       127.0.0.1 GET /sensores/S-001/lectura -> 200
+[10:43:45.183]       127.0.0.1 GET /sensores/S-002/lectura -> 200
+[10:43:45.739]       127.0.0.1 GET /sensores/S-002/lectura -> 503
+[10:43:47.892]       127.0.0.1 GET /sensores/S-003/lectura -> 200
+[10:43:49.654]       127.0.0.1 GET /sensores/S-002/lectura -> 200
+[10:43:49.732]       127.0.0.1 GET /sensores/S-003/lectura -> 429 (Retry-After: 2)
+[10:43:51.736]       127.0.0.1 GET /sensores -> 200
+[10:43:51.738]       127.0.0.1 GET /sensores -> 503
+[10:43:52.089]       127.0.0.1 GET /sensores -> 503
+[10:43:53.090]       127.0.0.1 GET /sensores -> 200
+[10:43:53.093]       127.0.0.1 GET /sensores -> 429 (Retry-After: 2)
+[10:43:55.096]       127.0.0.1 GET /sensores -> 429 (Retry-After: 2)
+[10:43:57.100]       127.0.0.1 GET /sensores -> 200
+[10:43:57.102]       127.0.0.1 GET /sensores -> 200
+[10:43:57.105]       127.0.0.1 GET /sensores -> 200
+[10:43:57.106]       127.0.0.1 GET /sensores/S-001/lectura -> 503
+[10:43:57.398]       127.0.0.1 GET /sensores/S-001/lectura -> 200
