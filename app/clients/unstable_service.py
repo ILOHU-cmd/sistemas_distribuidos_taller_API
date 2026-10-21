@@ -37,6 +37,14 @@ from app.clients import (
     TimeoutDependencia,
     UnstableServiceError,
 )
+from app.config import (
+    BACKOFF_BASE,
+    BACKOFF_TOPE,
+    MAX_INTENTOS,
+    TIMEOUT_CONEXION,
+    TIMEOUT_LECTURA,
+    TTL_CACHE,
+)
 from app.models import Sensor
 
 # ``UnstableServiceError`` se importa para reexportarlo: ``main.py`` y el router
@@ -44,14 +52,6 @@ from app.models import Sensor
 __all__ = ["UnstableServiceClient", "UnstableServiceError", "get_con_reintentos"]
 
 _log = logging.getLogger("app.clients.unstable_service")
-
-# --- Parámetros por defecto (los del contrato) -----------------------------
-MAX_INTENTOS = 5
-BACKOFF_BASE = 0.5
-BACKOFF_TOPE = 8.0
-TIMEOUT_CONEXION = 2.0
-TIMEOUT_LECTURA = 2.0  # < 4 s de lentitud simulada: lo lento es un timeout
-TTL_CACHE = 300
 
 # ``_dormir`` es una variable de módulo a propósito: en las pruebas se reemplaza
 # por un doble para medir las esperas sin dormir de verdad.

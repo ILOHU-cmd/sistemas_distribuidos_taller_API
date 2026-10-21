@@ -2,10 +2,13 @@
 """Caché en memoria con expiración TTL y protección asíncrona."""
 
 import time
-from dataclasses import dataclass
-from typing import Generic, TypeVar
-
+import asyncio
 from asyncio import Lock
+from dataclasses import dataclass
+from collections.abc import Awaitable, Callable
+from typing import Generic, TypeVar, cast
+
+from app.config import TTL_CACHE
 
 T = TypeVar("T")
 
@@ -40,3 +43,60 @@ class MemoryCache(Generic[T]):
         async with self._lock:
             self._entries[key] = _Entry(value=value, expires_at=time.monotonic() + self._ttl_seconds)
 
+
+@dataclass(slots=True)
+class _CachedValue(Generic[T]):
+    value: T
+
+
+_cache_compartida: MemoryCache[object] = MemoryCache(TTL_CACHE)
+_lock_single_flight = asyncio.Lock()
+_tareas_en_vuelo: dict[tuple[int, str], asyncio.Task[_CachedValue[object]]] = {}
+
+
+async def _calcular_y_guardar(
+    cache: MemoryCache[object],
+    clave: str,
+    fabrica: Callable[[], Awaitable[T]],
+) -> _CachedValue[T]:
+    tarea = asyncio.current_task()
+    llave_tarea = (id(cache), clave)
+    try:
+        valor = await fabrica()
+        resultado = _CachedValue(valor)
+        await cache.set(clave, resultado)
+        return resultado
+    finally:
+        async with _lock_single_flight:
+            if _tareas_en_vuelo.get(llave_tarea) is tarea:
+                del _tareas_en_vuelo[llave_tarea]
+
+
+async def obtener_o_calcular(
+    clave: str,
+    fabrica: Callable[[], Awaitable[T]],
+    *,
+    cache: MemoryCache[object] | None = None,
+) -> T:
+    """Devuelve el valor en caché o calcula una sola vez por clave concurrente."""
+
+    cache_usada = cache if cache is not None else _cache_compartida
+    valor_guardado = await cache_usada.get(clave)
+    if isinstance(valor_guardado, _CachedValue):
+        return cast(T, valor_guardado.value)
+
+    llave_tarea = (id(cache_usada), clave)
+    async with _lock_single_flight:
+        valor_guardado = await cache_usada.get(clave)
+        if isinstance(valor_guardado, _CachedValue):
+            return cast(T, valor_guardado.value)
+
+        tarea = _tareas_en_vuelo.get(llave_tarea)
+        if tarea is None:
+            tarea = asyncio.create_task(
+                _calcular_y_guardar(cache_usada, clave, fabrica)
+            )
+            _tareas_en_vuelo[llave_tarea] = tarea
+
+    resultado = await asyncio.shield(tarea)
+    return cast(T, resultado.value)
