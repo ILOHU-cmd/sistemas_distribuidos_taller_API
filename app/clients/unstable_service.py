@@ -35,8 +35,13 @@ from app.clients import (
     NoEncontrado,
     RespuestaInvalida,
     TimeoutDependencia,
+    UnstableServiceError,
 )
 from app.models import Sensor
+
+# ``UnstableServiceError`` se importa para reexportarlo: ``main.py`` y el router
+# de Daniela lo importan desde este submódulo.
+__all__ = ["UnstableServiceClient", "UnstableServiceError", "get_con_reintentos"]
 
 _log = logging.getLogger("app.clients.unstable_service")
 
