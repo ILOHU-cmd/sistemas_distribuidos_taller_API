@@ -6,7 +6,7 @@ import pytest
 import respx
 
 import app.clients.external_api as ex
-from app.clients import RespuestaInvalida, TimeoutDependencia
+from app.clients import ExternalApiError, RespuestaInvalida, TimeoutDependencia
 
 FEED_URL = "http://usgs.local/feed"
 DETALLE_URL = "http://usgs.local/detail/us1"
@@ -192,3 +192,17 @@ async def test_medir_latencia_compara_con_y_sin_cache(monkeypatch):
     # 1 calentamiento + 0 reales (con caché) + 3 reales (sin caché) = 4.
     assert ruta_feed.call_count == 4
     assert ruta_detalle.call_count == 4
+
+
+@pytest.mark.asyncio
+async def test_error_de_conexion_usgs_es_errordependencia(monkeypatch):
+    """Si no hay conexión con USGS, se traduce a ErrorDependencia (router -> 502)."""
+
+    monkeypatch.setattr(ex, "MemoryCache", CacheFalsa)
+    async with httpx.AsyncClient() as client:
+        with respx.mock:
+            respx.get(FEED_URL).mock(side_effect=httpx.ConnectError("sin red"))
+            with pytest.raises(ExternalApiError):
+                await ex.ExternalEarthquakeClient(
+                    client, FEED_URL, 5.0, 300
+                ).get_latest_event()

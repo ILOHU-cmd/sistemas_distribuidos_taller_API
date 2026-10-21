@@ -8,7 +8,8 @@ Cubre los puntos de resiliencia del taller:
    una respuesta lenta cuenta como timeout reintentable.
 2. Reintentos con backoff exponencial y *full jitter*.
 3. Solo se reintentan 503, 429 y timeouts; 400/404 y otros 4xx se devuelven
-   tal cual para que la capa superior los traduzca.
+   tal cual para que la capa superior los traduzca. Los errores de conexión
+   (servicio caído) no se reintentan: se traducen a ``UnstableServiceError`` (502).
 4. Si llega la cabecera ``Retry-After``, esa espera manda sobre el backoff.
 5. Tras un 429 el servicio bloquea por IP: se guarda un ``no_antes_de``
    compartido (``asyncio.Lock`` + ``time.monotonic``) que TODAS las tareas
@@ -183,7 +184,7 @@ async def get_con_reintentos(
 
     Devuelve la respuesta de cualquier estado NO reintentable (400, 404 u otros)
     para que la capa superior la traduzca. Solo reintenta 503, 429 y timeouts, y
-    lanza ``ErrorDependencia``/``TimeoutDependencia`` al agotar los intentos.
+    lanza ``UnstableServiceError``/``TimeoutDependencia`` al agotar los intentos.
     """
 
     timeout = timeout or _tiempo_timeout(TIMEOUT_LECTURA)
@@ -204,6 +205,13 @@ async def get_con_reintentos(
             await _dormir(espera)
             continue
 
+        except httpx.TransportError as exc:
+            # Conexión rechazada o cortada: reintentar no ayuda, así que se falla
+            # rápido con un error de dependencia (el router lo traduce a 502).
+            raise UnstableServiceError(
+                f"No se pudo conectar con el servicio inestable en {url}"
+            ) from exc
+
         if respuesta.status_code == 429:
             retry_after = _leer_retry_after(respuesta)
             if retry_after is not None:
@@ -213,7 +221,7 @@ async def get_con_reintentos(
             else:
                 espera, origen = _espera_backoff(intento, backoff_base)
             if intento >= max_intentos:
-                raise ErrorDependencia(
+                raise UnstableServiceError(
                     f"El servicio inestable sigue devolviendo 429 tras {max_intentos} intentos"
                 )
             _registrar(intento, max_intentos, "429", espera, origen)
@@ -222,7 +230,7 @@ async def get_con_reintentos(
 
         if respuesta.status_code == 503:
             if intento >= max_intentos:
-                raise ErrorDependencia(
+                raise UnstableServiceError(
                     f"El servicio inestable sigue devolviendo 503 tras {max_intentos} intentos"
                 )
             espera, origen = _espera_backoff(intento, backoff_base)
@@ -234,7 +242,7 @@ async def get_con_reintentos(
         return respuesta
 
     # Inalcanzable: el bucle siempre retorna o lanza en el último intento.
-    raise ErrorDependencia("Reintentos agotados sin respuesta")
+    raise UnstableServiceError("Reintentos agotados sin respuesta")
 
 
 # ---------------------------------------------------------------------------
@@ -286,7 +294,7 @@ class UnstableServiceClient:
         if respuesta.status_code == 404:
             raise NoEncontrado("El servicio inestable no encontró el listado de sensores")
         if respuesta.is_error:
-            raise ErrorDependencia(
+            raise UnstableServiceError(
                 f"El servicio inestable devolvió {respuesta.status_code} al listar sensores"
             )
         try:
@@ -325,7 +333,7 @@ class UnstableServiceClient:
         if respuesta.status_code == 404:
             raise NoEncontrado(f"No existe el sensor {sensor_id}")
         if respuesta.is_error:
-            raise ErrorDependencia(
+            raise UnstableServiceError(
                 f"El servicio inestable devolvió {respuesta.status_code} "
                 f"al pedir la lectura de {sensor_id}"
             )

@@ -22,7 +22,6 @@ from pydantic import BaseModel, ValidationError
 
 from app.cache import MemoryCache
 from app.clients import (
-    ErrorDependencia,
     ExternalApiError,
     NoEncontrado,
     RespuestaInvalida,
@@ -126,11 +125,13 @@ async def _encadenar_usgs(
         respuesta_feed = await client.get(feed_url, timeout=timeout)
     except httpx.TimeoutException as exc:
         raise TimeoutDependencia("USGS excedió el tiempo de espera al pedir el feed") from exc
+    except httpx.TransportError as exc:
+        raise ExternalApiError("No se pudo conectar con USGS al pedir el feed") from exc
 
     if respuesta_feed.status_code == 404:
         raise NoEncontrado("USGS no encontró el feed solicitado")
     if respuesta_feed.is_error:
-        raise ErrorDependencia(f"USGS devolvió {respuesta_feed.status_code} en el feed")
+        raise ExternalApiError(f"USGS devolvió {respuesta_feed.status_code} en el feed")
 
     try:
         feed = UsgsFeed.model_validate(_feed_normalizado(respuesta_feed.json()))
@@ -151,11 +152,15 @@ async def _encadenar_usgs(
         raise TimeoutDependencia(
             "USGS excedió el tiempo de espera al pedir el detalle del evento"
         ) from exc
+    except httpx.TransportError as exc:
+        raise ExternalApiError(
+            "No se pudo conectar con USGS al pedir el detalle del evento"
+        ) from exc
 
     if respuesta_detalle.status_code == 404:
         raise NoEncontrado("El evento ya no existe en USGS")
     if respuesta_detalle.is_error:
-        raise ErrorDependencia(
+        raise ExternalApiError(
             f"USGS devolvió {respuesta_detalle.status_code} en el detalle del evento"
         )
 
