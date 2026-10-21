@@ -1,0 +1,27 @@
+# Byte-compiled / optimized files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Entornos virtuales
+.venv/
+venv/
+env/
+
+# Variables de entorno reales (nunca subir secretos)
+.env
+.env.*
+!.env.example
+
+# Herramientas
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Editores / sistema
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
