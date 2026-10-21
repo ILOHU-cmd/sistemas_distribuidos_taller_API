@@ -7,13 +7,22 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Request
 
 from app.clients.external_api import ExternalApiError, ExternalEarthquakeClient
-from app.clients.unstable_service import UnstableServiceError
+from app.clients.unstable_service import Noencontrado, UnstableServiceError
 from app.models import RiskMonitoringResponse
 
 router = APIRouter(prefix="/v1", tags=["monitoreo"])
 
 
-@router.get("/monitoreo-riesgo", response_model=RiskMonitoringResponse)
+@router.get(
+    "/monitoreo-riesgo", 
+    response_model=RiskMonitoringResponse,
+    summary="Monitoreo de riesgo sísmico",
+    responses={
+        404: {"description": "Recurso no encontrado"},
+        502: {"description": "Error no recuperable en dependencia externa"},
+        504: {"description": "Tiempo de espera agotado en dependencia externa"},
+        }
+    )
 async def monitoreo_riesgo(request: Request) -> RiskMonitoringResponse:
     """Combina ambas dependencias; traduce fallos de dependencia a 502/504."""
 
@@ -26,6 +35,10 @@ async def monitoreo_riesgo(request: Request) -> RiskMonitoringResponse:
         )
     except (asyncio.TimeoutError, TimeoutError) as exc:
         raise HTTPException(status_code=504, detail="Una dependencia excedió el tiempo total permitido") from exc
+    
+    except Noencontrado as exc:
+        raise HTTPException(estatus_code=404, detail=str(exc)) from exc
+    
     except (ExternalApiError, UnstableServiceError) as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
