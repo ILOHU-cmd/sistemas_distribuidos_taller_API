@@ -304,7 +304,7 @@ class UnstableServiceClient:
         while True:
             pagina = await self._pedir_pagina(cursor)
             sensores.extend(
-                Sensor(id=crudo.id, ubicacion=crudo.ubicacion)
+                Sensor(id=crudo.id, tipo=crudo.tipo, ubicacion=crudo.ubicacion)
                 for crudo in pagina.sensores
             )
             if pagina.siguiente is None:

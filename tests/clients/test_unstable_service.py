@@ -51,6 +51,7 @@ async def test_503_luego_200_reintenta(dormidas):
 
     assert ruta.call_count == 2
     assert [s.id for s in sensores] == ["S-001"]
+    assert sensores[0].tipo == "temperatura"
     assert len(dormidas) == 1  # se calculó exactamente una espera
 
 

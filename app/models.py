@@ -50,6 +50,7 @@ class Sensor(StrictModel):
     """Representa un sensor devuelto por el servicio inestable."""
 
     id: StrictStr
+    tipo: StrictStr | None = None
     nombre: StrictStr | None = None
     valor: StrictFloat | StrictInt | None = None
     unidad: StrictStr | None = None
@@ -84,4 +85,3 @@ class AlertResponse(StrictModel):
     mensaje: StrictStr
     severidad: StrictStr
     creada_en: datetime
-
