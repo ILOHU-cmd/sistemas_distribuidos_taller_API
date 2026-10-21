@@ -156,3 +156,39 @@ async def test_obtener_ultimo_sismo_devuelve_hit(monkeypatch):
     assert hit_dos is True
     assert sismo_dos is not None
     assert sismo_dos.id == "us1"
+
+
+def test_percentil_y_resumen_latencia():
+    """El p95 es por rango más cercano y el resumen promedia bien."""
+
+    assert ex._percentil([], 95) == 0.0
+    assert ex._percentil([10, 20, 30, 40, 50], 50) == 30
+    assert ex._percentil([10, 20, 30, 40, 50], 95) == 50
+    resumen = ex._resumen([10.0, 20.0, 30.0])
+    assert resumen.muestras == 3
+    assert resumen.media_ms == 20.0
+    assert resumen.p95_ms == 30.0
+
+
+@pytest.mark.asyncio
+async def test_medir_latencia_compara_con_y_sin_cache(monkeypatch):
+    """Con caché hay 1 llamada real (calentamiento); sin caché, una por muestra."""
+
+    monkeypatch.setattr(ex, "MemoryCache", CacheFalsa)
+    async with httpx.AsyncClient() as client:
+        with respx.mock:
+            ruta_feed = respx.get(FEED_URL).mock(
+                return_value=httpx.Response(200, json=FEED)
+            )
+            ruta_detalle = respx.get(DETALLE_URL).mock(
+                return_value=httpx.Response(200, json=DETALLE)
+            )
+            api = ex.ExternalEarthquakeClient(client, FEED_URL, 5.0, 300)
+            resultado = await api.medir_latencia(muestras=3)
+
+    assert set(resultado) == {"con_cache", "sin_cache"}
+    assert resultado["con_cache"].muestras == 3
+    assert resultado["sin_cache"].muestras == 3
+    # 1 calentamiento + 0 reales (con caché) + 3 reales (sin caché) = 4.
+    assert ruta_feed.call_count == 4
+    assert ruta_detalle.call_count == 4

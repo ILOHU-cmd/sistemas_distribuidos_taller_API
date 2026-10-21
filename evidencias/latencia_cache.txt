@@ -1,0 +1,10 @@
+### Evidencia C8: latencia de la API externa (USGS) con y sin cache
+### Fecha: 2026-10-21T10:58:31-05:00
+### Comando: PYTHONPATH=. python tests/clients/medir_latencia.py
+### Muestras por modo: 5 (con cache se calienta antes; sin cache cada llamada es real)
+
+API externa: https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson
+muestras por modo: 5
+modo          muestras    media_ms      p95_ms
+con_cache            5       0.002       0.003
+sin_cache            5     479.529    1174.669
