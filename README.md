@@ -26,6 +26,27 @@ uvicorn main:app --reload
 
 La documentación interactiva queda en `http://localhost:8000/docs`.
 
+Para ejecutar las pruebas automatizadas:
+
+```bash
+pip install -r requirements-dev.txt
+pytest -q
+```
+
+## Servicio inestable local
+
+El endpoint agregado consulta un servicio de sensores en `http://localhost:9000`.
+El archivo `servicio_inestable.py` se entrega aparte (no se versiona). Colócalo en
+la raíz del proyecto y ejecútalo en otra terminal:
+
+```bash
+python servicio_inestable.py --semilla 42 --tasa-fallos 0.2 \
+  --tasa-429 0.05 --tasa-lentitud 0.15 --latencia 1.5
+```
+
+Sus parámetros permiten simular `503`, `429` con `Retry-After`, respuestas lentas
+y bloqueo por IP. Si no está corriendo, `GET /v1/monitoreo-riesgo` responde `502`.
+
 ## Configuración
 
 Todas las variables se leen desde el entorno o desde `.env` (ver `.env.example`):
@@ -68,6 +89,7 @@ Consulta en paralelo el último sismo de USGS y todos los sensores, y devuelve:
 
 Códigos de error:
 
+- `404`: el recurso no existe en la dependencia externa.
 - `502`: una dependencia devolvió una respuesta inválida o no disponible.
 - `504`: se superó el deadline total configurado.
 
@@ -87,6 +109,32 @@ siguiente cuerpo:
 
 Repetir la petición con la misma clave devuelve exactamente la misma respuesta
 (`201 Created`) sin volver a procesarla.
+
+#### Prueba de idempotencia
+
+```bash
+KEY=demo-key-001
+BODY='{"sensor_id":"S-001","tipo":"temperatura","mensaje":"Umbral","severidad":"alta"}'
+
+# 1a vez -> 201 con un id
+curl -s -X POST http://localhost:8000/v1/alertas \
+  -H "Content-Type: application/json" -H "Idempotency-Key: $KEY" -d "$BODY"
+
+# misma key + mismo cuerpo -> 201 con el MISMO id
+curl -s -X POST http://localhost:8000/v1/alertas \
+  -H "Content-Type: application/json" -H "Idempotency-Key: $KEY" -d "$BODY"
+
+# misma key + cuerpo distinto -> 422
+curl -s -X POST http://localhost:8000/v1/alertas \
+  -H "Content-Type: application/json" -H "Idempotency-Key: $KEY" \
+  -d '{"sensor_id":"S-002","tipo":"ruido","mensaje":"Otro","severidad":"baja"}'
+
+# sin cabecera -> 422
+curl -s -X POST http://localhost:8000/v1/alertas \
+  -H "Content-Type: application/json" -d "$BODY"
+```
+
+Los mismos ejemplos están en `requests.http` para VS Code (REST Client).
 
 ## Estructura
 
@@ -112,7 +160,20 @@ app/
 - **Deadline total** con `asyncio.wait_for` sobre ambas dependencias.
 - **Caché TTL** del último sismo para reducir llamadas a USGS; las peticiones
   concurrentes para una misma clave comparten la consulta en curso.
-- **Idempotencia** protegida con `asyncio.Lock` en memoria del proceso.
+- **Idempotencia** protegida con un `asyncio.Lock` por clave en memoria del proceso.
 
 > Nota: la caché y el almacén de idempotencia son por proceso. Para varias
 > instancias haría falta un backend compartido (por ejemplo Redis).
+
+## Evidencia de latencia (C8)
+
+Medición real contra USGS con `PYTHONPATH=. python tests/clients/medir_latencia.py`
+(5 muestras por modo):
+
+| Modo | Muestras | Media (ms) | p95 (ms) |
+|---|---:|---:|---:|
+| Con caché | 5 | 0.002 | 0.003 |
+| Sin caché | 5 | 479.529 | 1174.669 |
+
+Detalle completo en `evidencias/latencia_cache.txt`. Los logs de los reintentos,
+del backoff y del `Retry-After` están en `evidencias/logs_clients.txt`.

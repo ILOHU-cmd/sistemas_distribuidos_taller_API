@@ -1,0 +1,73 @@
+# requests.http
+# Ejemplos para VS Code (REST Client) o IntelliJ HTTP Client.
+# Requiere: uvicorn main:app --reload  y  python servicio_inestable.py (puerto 9000).
+
+@api = http://localhost:8000
+@inestable = http://localhost:9000
+@key = demo-key-001
+
+### Salud de la API
+GET {{api}}/salud
+
+### Monitoreo de riesgo (1a llamada: cache_hit=false si la cache esta fria)
+GET {{api}}/v1/monitoreo-riesgo
+
+### Monitoreo de riesgo (2a llamada: cache_hit=true)
+GET {{api}}/v1/monitoreo-riesgo
+
+### Crear alerta (1a vez: 201)
+POST {{api}}/v1/alertas
+Content-Type: application/json
+Idempotency-Key: {{key}}
+
+{
+  "sensor_id": "S-001",
+  "tipo": "temperatura",
+  "mensaje": "Valor fuera de rango",
+  "severidad": "alta"
+}
+
+### Repetir misma key + mismo cuerpo (201 con el MISMO id)
+POST {{api}}/v1/alertas
+Content-Type: application/json
+Idempotency-Key: {{key}}
+
+{
+  "sensor_id": "S-001",
+  "tipo": "temperatura",
+  "mensaje": "Valor fuera de rango",
+  "severidad": "alta"
+}
+
+### Misma key + cuerpo distinto (422)
+POST {{api}}/v1/alertas
+Content-Type: application/json
+Idempotency-Key: {{key}}
+
+{
+  "sensor_id": "S-002",
+  "tipo": "ruido",
+  "mensaje": "Otro cuerpo",
+  "severidad": "baja"
+}
+
+### Sin Idempotency-Key (422)
+POST {{api}}/v1/alertas
+Content-Type: application/json
+
+{
+  "sensor_id": "S-003",
+  "tipo": "humedad",
+  "mensaje": "Sin cabecera",
+  "severidad": "media"
+}
+
+### Servicio inestable: salud y configuracion
+GET {{inestable}}/salud
+GET {{inestable}}/config
+
+### Servicio inestable: listado paginado (23 sensores)
+GET {{inestable}}/sensores
+
+### Servicio inestable: lectura de un sensor
+GET {{inestable}}/sensores/S-001/lectura
