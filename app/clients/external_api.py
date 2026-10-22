@@ -20,7 +20,7 @@ from math import ceil
 import httpx
 from pydantic import BaseModel, ValidationError
 
-from app.cache import MemoryCache
+from app.cache import MemoryCache, obtener_o_calcular
 from app.clients import (
     ErrorDependencia,
     ExternalApiError,
@@ -29,10 +29,9 @@ from app.clients import (
     TimeoutDependencia,
 )
 from app.models import UsgsFeature, UsgsFeed, UsgsGeometry, UsgsProperties
+from app.config import TTL_CACHE, TIMEOUT_CONEXION
 
-TIMEOUT_CONEXION = 2.0
-TIMEOUT_LECTURA = 5.0  # USGS sale a internet: damos algo más de margen
-TTL_CACHE = 300
+TIMEOUT_LECTURA_USGS = 5.0
 
 
 def _tiempo_timeout(timeout_seconds: float) -> httpx.Timeout:
@@ -180,7 +179,7 @@ class ExternalEarthquakeClient:
         self._client = client
         self._feed_url = feed_url
         self._timeout = _tiempo_timeout(timeout_seconds)
-        self._cache: MemoryCache[UsgsFeature | None] = MemoryCache(ttl_seconds)
+        self._cache: MemoryCache[object] = MemoryCache(ttl_seconds)
 
     async def get_latest_event(self, usar_cache: bool = True) -> ExternalResult:
         """Devuelve el último sismo con detalle, usando la caché con TTL.
@@ -189,17 +188,21 @@ class ExternalEarthquakeClient:
         """
 
         inicio = time.perf_counter()
-        if usar_cache:
-            guardado = await self._cache.get(self._feed_url)
-            if guardado is not None:
-                return ExternalResult(
-                    guardado, True, (time.perf_counter() - inicio) * 1000
-                )
+        if not usar_cache:
+            sismo = await _encadenar_usgs(self._client, self._feed_url, self._timeout)
+            return ExternalResult(sismo, False, (time.perf_counter() - inicio) * 1000)
 
-        sismo = await _encadenar_usgs(self._client, self._feed_url, self._timeout)
-        if sismo is not None:
-            await self._cache.set(self._feed_url, sismo)
-        return ExternalResult(sismo, False, (time.perf_counter() - inicio) * 1000)
+        calculo_real = False
+
+        async def fabrica() -> UsgsFeature | None:
+            nonlocal calculo_real
+            calculo_real = True
+            return await _encadenar_usgs(self._client, self._feed_url, self._timeout)
+
+        sismo = await obtener_o_calcular(self._feed_url, fabrica, cache=self._cache)
+        return ExternalResult(
+            sismo, not calculo_real, (time.perf_counter() - inicio) * 1000
+        )
 
     async def medir_latencia(self, muestras: int = 5) -> dict[str, ResumenLatencia]:
         """Mide latencia con y sin caché (media y p95) sobre la API externa."""
@@ -219,10 +222,10 @@ class ExternalEarthquakeClient:
 
 
 # Caché de módulo para la función de conveniencia del contrato.
-_cache_externa: MemoryCache[UsgsFeature | None] | None = None
+_cache_externa: MemoryCache[object] | None = None
 
 
-def _cache_de_modulo(ttl_segundos: int) -> MemoryCache[UsgsFeature | None]:
+def _cache_de_modulo(ttl_segundos: int) -> MemoryCache[object]:
     """Crea (una sola vez) la caché compartida por ``obtener_ultimo_sismo``."""
 
     global _cache_externa
@@ -235,20 +238,23 @@ async def obtener_ultimo_sismo(
     client: httpx.AsyncClient,
     feed_url: str,
     *,
-    timeout_seconds: float = TIMEOUT_LECTURA,
+    timeout_seconds: float = TIMEOUT_LECTURA_USGS,
     ttl_segundos: int = TTL_CACHE,
 ) -> tuple[UsgsFeature | None, bool]:
     """Igual que la clase pero sin instanciarla: devuelve ``(sismo, fue_hit)``."""
 
     cache = _cache_de_modulo(ttl_segundos)
-    guardado = await cache.get(feed_url)
-    if guardado is not None:
-        return guardado, True
+    calculo_real = False
 
-    sismo = await _encadenar_usgs(client, feed_url, _tiempo_timeout(timeout_seconds))
-    if sismo is not None:
-        await cache.set(feed_url, sismo)
-    return sismo, False
+    async def fabrica() -> UsgsFeature | None:
+        nonlocal calculo_real
+        calculo_real = True
+        return await _encadenar_usgs(
+            client, feed_url, _tiempo_timeout(timeout_seconds)
+        )
+
+    sismo = await obtener_o_calcular(feed_url, fabrica, cache=cache)
+    return sismo, not calculo_real
 
 
 __all__ = [

@@ -34,13 +34,17 @@ Todas las variables se leen desde el entorno o desde `.env` (ver `.env.example`)
 | --- | --- | --- |
 | `APP_NAME` | `Agregador Resiliente de APIs` | Nombre de la aplicación |
 | `ENVIRONMENT` | `development` | Entorno de ejecución |
-| `UNSTABLE_SERVICE_URL` | `http://localhost:9000` | Base del servicio de sensores |
+| `UNSTABLE_SERVICE_URL` | `http://localhost:9000` | Base del servicio de sensores (`URL_INESTABLE`) |
 | `USGS_FEED_URL` | feed `all_hour` de USGS | Feed GeoJSON de terremotos |
 | `HTTP_TIMEOUT_SECONDS` | `5.0` | Timeout por petición HTTP |
 | `UNSTABLE_TOTAL_TIMEOUT_SECONDS` | `20.0` | Deadline total del endpoint agregado |
-| `MAX_RETRIES` | `3` | Reintentos máximos ante 503/timeout |
-| `BACKOFF_BASE` | `2.0` | Base del backoff exponencial |
-| `CACHE_TTL_SECONDS` | `60` | TTL de la caché del último sismo |
+| `MAX_RETRIES` | `5` | Intentos máximos ante 503/timeout (`MAX_INTENTOS`) |
+| `BACKOFF_BASE` | `0.5` | Base del backoff exponencial |
+| `CACHE_TTL_SECONDS` | `300` | TTL de la caché |
+
+El contrato del cliente inestable define además `BACKOFF_TOPE=8.0`,
+`TIMEOUT_CONEXION=2.0` y `TIMEOUT_LECTURA=2.0`. Las consultas simultáneas
+para la misma clave de caché comparten un solo cálculo (single-flight).
 
 ## Endpoints
 
@@ -91,7 +95,7 @@ main.py                     # App FastAPI, lifespan y manejo de errores
 app/
   config.py                 # Configuración validada con pydantic-settings
   models.py                 # Modelos Pydantic (USGS, sensores, alertas)
-  cache.py                  # Caché en memoria con TTL y lock asíncrono
+  cache.py                  # Caché TTL y cálculo single-flight por clave
   clients/
     external_api.py         # Cliente USGS (feed + detalle)
     unstable_service.py     # Cliente con reintentos, Retry-After y paginación
@@ -106,7 +110,8 @@ app/
 - **`429`** respeta la cabecera `Retry-After`.
 - **`400` y `404`** fallan de inmediato (no se reintentan).
 - **Deadline total** con `asyncio.wait_for` sobre ambas dependencias.
-- **Caché TTL** del último sismo para reducir llamadas a USGS.
+- **Caché TTL** del último sismo para reducir llamadas a USGS; las peticiones
+  concurrentes para una misma clave comparten la consulta en curso.
 - **Idempotencia** protegida con `asyncio.Lock` en memoria del proceso.
 
 > Nota: la caché y el almacén de idempotencia son por proceso. Para varias

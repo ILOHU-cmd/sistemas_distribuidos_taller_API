@@ -12,12 +12,16 @@ class StrictModel(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid")
 
 
-class UsgsGeometry(StrictModel):
+class UsgsModel(StrictModel):
+    model_config = ConfigDict(strict=True, extra="ignore")
+
+
+class UsgsGeometry(UsgsModel):
     type: StrictStr
     coordinates: list[float | int]
 
 
-class UsgsProperties(StrictModel):
+class UsgsProperties(UsgsModel):
     mag: StrictFloat | StrictInt | None = None
     place: StrictStr | None = None
     time: StrictInt | None = None
@@ -29,14 +33,14 @@ class UsgsProperties(StrictModel):
     title: StrictStr | None = None
 
 
-class UsgsFeature(StrictModel):
+class UsgsFeature(UsgsModel):
     type: StrictStr
     id: StrictStr
     properties: UsgsProperties
     geometry: UsgsGeometry | None = None
 
 
-class UsgsFeed(StrictModel):
+class UsgsFeed(UsgsModel):
     type: StrictStr
     metadata: dict[str, Any]
     features: list[UsgsFeature]
@@ -46,6 +50,7 @@ class Sensor(StrictModel):
     """Representa un sensor devuelto por el servicio inestable."""
 
     id: StrictStr
+    tipo: StrictStr | None = None
     nombre: StrictStr | None = None
     valor: StrictFloat | StrictInt | None = None
     unidad: StrictStr | None = None
@@ -80,4 +85,3 @@ class AlertResponse(StrictModel):
     mensaje: StrictStr
     severidad: StrictStr
     creada_en: datetime
-
