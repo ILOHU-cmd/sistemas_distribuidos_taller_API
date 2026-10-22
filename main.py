@@ -29,6 +29,7 @@ async def lifespan(app: FastAPI):
         settings.backoff_base,
     )
     app.state.idempotency_store = {}
+    app.state.idempotency_locks = {}
     import asyncio
 
     app.state.idempotency_lock = asyncio.Lock()

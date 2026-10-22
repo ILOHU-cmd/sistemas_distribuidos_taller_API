@@ -31,10 +31,9 @@ async def crear_alerta(
     """Procesa una clave una sola vez y devuelve exactamente el resultado guardado."""
 
     store: dict[str, AlertResponse] = request.app.state.idempotency_store
-    lock: asyncio.Lock = request.app.state.idempotency_lock
-    
-    locks = locks.setdefault(idempotency_key, asyncio.Lock())
-    
+    locks: dict[str, asyncio.Lock] = request.app.state.idempotency_locks
+    lock = locks.setdefault(idempotency_key, asyncio.Lock())
+
     async with lock:
         previous = store.get(idempotency_key)
         payload_data = payload.model_dump()
