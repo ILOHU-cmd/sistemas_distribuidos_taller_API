@@ -1,0 +1,805 @@
+% =====================================================================
+%  exposicion_clients.tex
+%  Agregador resiliente de APIs - Clientes de dependencias externas
+%  Documento de apoyo para la exposicion (parte de Emerson)
+%  Compilar con:  pdflatex exposicion_clients.tex  (dos veces)
+% =====================================================================
+\documentclass[11pt,a4paper]{article}
+
+% ---------- Codificacion e idioma ----------
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish,es-noquoting,es-nodecimaldot]{babel}
+\usepackage{lmodern}
+\usepackage{textcomp}
+\usepackage{amsmath,amssymb}
+
+% ---------- Geometria y tipografia ----------
+\usepackage[margin=2.4cm]{geometry}
+\usepackage{microtype}
+\usepackage{parskip}
+\emergencystretch=3em
+
+% ---------- Tablas, figuras, graficos ----------
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric,babel}
+\usepackage{xcolor}
+
+% ---------- Codigo fuente ----------
+\usepackage{listings}
+\usepackage{upquote}
+
+% ---------- Hipervinculos ----------
+\usepackage[hidelinks]{hyperref}
+
+% ---------- Colores ----------
+\definecolor{azul}{HTML}{1F4E79}
+\definecolor{verde}{HTML}{2E7D32}
+\definecolor{gris}{HTML}{F2F2F2}
+\definecolor{grisborde}{HTML}{BDBDBD}
+\definecolor{naranja}{HTML}{B45309}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=azul,
+  urlcolor=azul,
+  citecolor=azul,
+  pdftitle={Agregador resiliente de APIs - Clientes externos},
+  pdfauthor={Emerson}
+}
+
+% ---------- Estilo de listings (Python) ----------
+\lstdefinestyle{py}{
+  language=Python,
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{azul}\bfseries,
+  commentstyle=\color{verde}\itshape,
+  stringstyle=\color{naranja},
+  numberstyle=\tiny\color{gray},
+  numbers=left,
+  numbersep=8pt,
+  stepnumber=1,
+  frame=single,
+  rulecolor=\color{grisborde},
+  backgroundcolor=\color{gris},
+  showstringspaces=false,
+  breaklines=true,
+  breakatwhitespace=false,
+  tabsize=4,
+  upquote=true,
+  extendedchars=true,
+  inputencoding=utf8,
+  columns=fullflexible,
+  keepspaces=true,
+  literate=%
+    {á}{{\'a}}1 {é}{{\'e}}1 {í}{{\'i}}1 {ó}{{\'o}}1 {ú}{{\'u}}1
+    {Á}{{\'A}}1 {É}{{\'E}}1 {Í}{{\'I}}1 {Ó}{{\'O}}1 {Ú}{{\'U}}1
+    {ñ}{{\~n}}1 {Ñ}{{\~N}}1 {ü}{{\"u}}1
+    {°}{{$^{\circ}$}}1 {¿}{{?`}}1 {¡}{{!`}}1 {–}{{-}}1 {—}{{---}}1
+}
+\lstset{style=py}
+
+% ---------- Macros de comodidad ----------
+\newcommand{\arch}[1]{\texttt{#1}}
+\newcommand{\quot}{\textquotedbl}
+\newcommand{\req}[1]{\textbf{\textcolor{azul}{#1}}}
+\newcommand{\ok}{\textcolor{verde}{\textbf{\checkmark}}}
+\newcommand{\no}{\textcolor{red}{\textbf{$\times$}}}
+
+% =====================================================================
+\begin{document}
+
+% ---------------------------- PORTADA --------------------------------
+\begin{titlepage}
+  \centering
+  \vspace*{2.2cm}
+  {\scshape\Large Sistemas Distribuidos \par}
+  \vspace{0.4cm}
+  {\large Taller: Agregador resiliente de APIs \par}
+  \vspace{2.5cm}
+  \rule{\linewidth}{0.5pt}\par
+  \vspace{0.6cm}
+  {\Huge\bfseries Clientes de dependencias externas \par}
+  \vspace{0.4cm}
+  {\Large \arch{app/clients} \; y \; \arch{tests/clients} \par}
+  \vspace{0.6cm}
+  \rule{\linewidth}{0.5pt}\par
+  \vspace{2.2cm}
+
+  {\large \textbf{Autor (esta parte):} Emerson \par}
+  \vspace{0.2cm}
+  {\large \textbf{Rol:} consumo resiliente de dependencias \par}
+  \vspace{1.6cm}
+
+  \begin{tabular}{rl}
+    \toprule
+    \textbf{Paquete} & \arch{app/clients/} \\
+    \textbf{Puebas}  & \arch{tests/clients/} \\
+    \textbf{API externa elegida} & USGS (terremotos) \\
+    \textbf{Servicio inestable} & \arch{servicio\_inestable.py} (puerto 9000) \\
+    \textbf{Estado} & 20 pruebas en verde \\
+    \bottomrule
+  \end{tabular}
+
+  \vfill
+  {\large \today \par}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% =====================================================================
+\section{Introduccion y contexto}
+% =====================================================================
+
+El taller pide construir una \textbf{API agregadora resiliente}: un servicio
+propio (FastAPI) que \emph{agrega} dos dependencias que no controlamos:
+
+\begin{enumerate}
+  \item un \textbf{servicio local inestable} (sensores) que falla de forma
+        aleatoria (503), responde lentamente, corta conexiones y aplica
+        limites de tasa (429 con \arch{Retry-After});
+  \item una \textbf{API publica real} por Internet (en este caso, los
+        terremotos de \textbf{USGS}).
+\end{enumerate}
+
+Mi responsabilidad es unicamente la capa de \textbf{clientes}: la pieza que
+sabe \emph{hablar} con esas dos dependencias y \emph{sobrevivir} cuando se
+portan mal. El resto del proyecto lo cubren mis companeras:
+
+\begin{itemize}
+  \item \textbf{Nataly}: \arch{app/config.py}, \arch{app/models.py},
+        \arch{app/cache.py}.
+  \item \textbf{Daniela}: \arch{app/routers/*}.
+  \item \textbf{Grupal}: \arch{main.py}, \arch{README.md},
+        \arch{requirements.txt}.
+\end{itemize}
+
+\subsection{Que se evalua (rubrica)}
+\begin{table}[H]
+\centering
+\begin{tabular}{lr l}
+\toprule
+\textbf{Criterio} & \textbf{Puntos} & \textbf{Donde cae} \\
+\midrule
+Consumo de dependencias          & 15 & \arch{app/clients/} \\
+API propia (endpoints)           & 20 & routers (Daniela) \\
+Resiliencia                      & 30 & \arch{app/clients/} \\
+Cache + latencia                 & 10 & \arch{app/clients/} \\
+Idempotencia                     & 10 & routers (Daniela) \\
+Analisis / hallazgos             & 15 & informe (grupo) \\
+\midrule
+Bonus                            & +10 & extras bien justificados \\
+\bottomrule
+\end{tabular}
+\caption{Reparto de la rubrica y de quien lo cubre.}
+\end{table}
+
+% =====================================================================
+\section{Arquitectura general}
+% =====================================================================
+
+La figura~\ref{fig:arq} ubica mi parte dentro del sistema completo. Las
+flechas discontinuas son dependencias que \emph{yo no controlo}: por eso el
+cliente debe ser defensivo.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  font=\small,
+  caja/.style={rectangle, rounded corners, draw, thick, align=center,
+               minimum height=1.1cm, minimum width=2.9cm, fill=white},
+  mio/.style={caja, fill=azul!12, draw=azul, very thick},
+  ext/.style={caja, fill=orange!12, draw=naranja, dashed, very thick},
+  >={Stealth[length=2.5mm]}
+]
+  \node[mio] (clients) {%
+    \textbf{app/clients}\\[-2pt]
+    \footnotesize Emerson\\[-2pt]
+    \scriptsize (resiliencia)};
+  \node[caja, below=1.5cm of clients, xshift=-3.4cm] (main)
+    {main.py\\\scriptsize FastAPI};
+  \node[caja, below=1.5cm of clients, xshift=3.4cm] (routers)
+    {routers / v1\\\scriptsize Daniela};
+
+  \node[ext, above left=1.4cm and 1.0cm of clients] (inestable)
+    {servicio\_inestable\\\scriptsize :9000 (falla)};
+  \node[ext, above right=1.4cm and 1.0cm of clients] (usgs)
+    {USGS (HTTPS)\\\scriptsize Internet};
+
+  \node[caja, left=1.4cm of clients, fill=verde!10, draw=verde] (cache)
+    {cache.py\\\scriptsize Nataly};
+  \node[caja, right=1.4cm of clients, fill=verde!10, draw=verde] (models)
+    {models.py\\\scriptsize Nataly};
+
+  \draw[->, thick] (main) -- (clients);
+  \draw[->, thick] (routers) -- (clients);
+  \draw[<->, dashed, naranja] (clients) -- (inestable);
+  \draw[<->, dashed, naranja] (clients) -- (usgs);
+  \draw[->, dashed, verde] (clients) -- (cache);
+  \draw[->, dashed, verde] (clients) -- (models);
+\end{tikzpicture}
+\caption{Arquitectura general. En azul, mi parte; en naranja punteado, las
+dependencias que no controlo; en verde, los modulos de Nataly.}
+\label{fig:arq}
+\end{figure}
+
+% =====================================================================
+\section{Mi alcance y el contrato}
+% =====================================================================
+
+Solo toco estos archivos (nada de mis companeras):
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{p{4.4cm} p{9.4cm}}
+\toprule
+\textbf{Archivo} & \textbf{Responsabilidad} \\
+\midrule
+\arch{\_\_init\_\_.py} &
+  Jerarquia de excepciones del contrato. Se define aqui (y no en los
+  submodulos) para evitar importaciones circulares. \\
+\arch{unstable\_service.py} &
+  Cliente resiliente del servicio de sensores: timeouts, reintentos
+  selectivos, backoff, \arch{Retry-After}, bloqueo por IP, paginacion,
+  degradacion parcial. \\
+\arch{external\_api.py} &
+  Cliente de USGS: dos llamadas encadenadas (feed $\rightarrow$ detalle),
+  validacion Pydantic, cache con TTL y medicion de latencia. \\
+\arch{tests/clients/} &
+  Pruebas automatizadas (pytest + respx) y evidencia real. \\
+\bottomrule
+\end{tabular}
+\caption{Archivos de mi parte (dentro de \arch{app/clients/}).}
+\end{table}
+
+\subsection{Decision de diseno: API por clases}
+El esqueleto original define los clientes como \textbf{clases} y
+\arch{main.py} / el router de Daniela ya las instancian asi
+(\arch{ExternalEarthquakeClient}, \arch{UnstableServiceClient}).
+Por eso \textbf{mantengo las clases} y conservo sus firmas, y ademas expongo
+funciones equivalentes del contrato (\arch{get\_con\_reintentos},
+\arch{obtener\_ultimo\_sismo}). Cambiar a un estilo solo-funciones habria
+roto el codigo de mis companeras.
+
+% =====================================================================
+\section{Jerarquia de excepciones (\arch{\_\_init\_\_.py})}
+% =====================================================================
+
+El router traduce las excepciones a codigos HTTP. Para que eso funcione sin
+tocar su codigo, las excepciones nuevas \textbf{heredan} de las que ya se
+usaban (\arch{UnstableServiceError} y \arch{ExternalApiError}) y ademas de
+\arch{TimeoutError} cuando corresponde (para que el 504 se dispare solo).
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  font=\small,
+  exc/.style={rectangle, draw, thick, rounded corners, align=center,
+              minimum height=0.95cm, fill=white, inner sep=4pt},
+  >={Stealth[length=2.5mm]}
+]
+  \node[exc, fill=red!12] (base) {\arch{Exception}};
+  \node[exc, fill=azul!15, below=of base] (dep)
+    {\arch{ErrorDependencia}\\\scriptsize (router $\to$ 502)};
+  \node[exc, below left=1.2cm and 0.4cm of dep] (uns)
+    {\arch{UnstableServiceError}\\\scriptsize compatibilidad};
+  \node[exc, below right=1.2cm and 0.4cm of dep] (ext)
+    {\arch{ExternalApiError}\\\scriptsize compatibilidad};
+  \node[exc, below=1.1cm of uns, fill=orange!15] (to)
+    {\arch{TimeoutDependencia}\\{\scriptsize (y \arch{TimeoutError})}\\\scriptsize router $\to$ 504};
+  \node[exc, below left=1.1cm and -0.2cm of to] (noe)
+    {\arch{NoEncontrado}\\\scriptsize $\to$ 404};
+  \node[exc, below right=1.1cm and -0.2cm of to] (inv)
+    {\arch{RespuestaInvalida}\\\scriptsize $\to$ 502};
+
+  \draw[->, thick] (base) -- (dep);
+  \draw[->, thick] (dep) -- (uns);
+  \draw[->, thick] (dep) -- (ext);
+  \draw[->, thick] (uns) -- (to);
+  \draw[->, thick] (uns) -- (noe);
+  \draw[->, thick] (uns) -- (inv);
+\end{tikzpicture}
+\caption{Jerarquia de excepciones. Las nuevas heredan de las de
+compatibilidad, asi el router sigue funcionando.}
+\label{fig:exc}
+\end{figure}
+
+\begin{lstlisting}[caption={app/clients/\_\_init\_\_.py (fragmento)}]
+class ErrorDependencia(Exception):
+    """Fallo de una dependencia que no se puede resolver (el router -> 502)."""
+
+class UnstableServiceError(ErrorDependencia):
+    """Error del servicio inestable. Compatibilidad con main.py/router (502)."""
+
+class ExternalApiError(ErrorDependencia):
+    """Error de la API externa. Compatibilidad con main.py/router (502)."""
+
+class TimeoutDependencia(UnstableServiceError, TimeoutError):
+    """La dependencia no respondio en el tiempo permitido (router -> 504)."""
+
+class NoEncontrado(UnstableServiceError):
+    """El recurso no existe en la dependencia (404 de origen -> 404)."""
+
+class RespuestaInvalida(UnstableServiceError):
+    """La respuesta no cumple el modelo Pydantic esperado (router -> 502)."""
+\end{lstlisting}
+
+\textbf{Idea clave para explicar:} \arch{TimeoutDependencia} hereda de
+\arch{TimeoutError}; el router atrapa \arch{asyncio.TimeoutError} para el 504,
+asi que un timeout real del cliente cae \emph{naturalmente} en el 504.
+
+% =====================================================================
+\section{Cliente resiliente (\arch{unstable\_service.py})}
+% =====================================================================
+
+Este archivo concentra el \textbf{30\% de la rubrica}. Cada mecanismo es un
+requisito independiente.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{c p{6.2cm} p{5.6cm}}
+\toprule
+\textbf{Req.} & \textbf{Mecanismo} & \textbf{Evidencia en codigo} \\
+\midrule
+C2 & Timeout explicito (conexion/lectura separadas) & \arch{\_tiempo\_timeout} \\
+C3 & Reintentos selectivos (solo 503/429/timeout) & \arch{get\_con\_reintentos} \\
+C4 & Backoff exponencial + \emph{full jitter} & \arch{\_espera\_backoff} \\
+C5 & \arch{Retry-After} + bloqueo compartido por IP & \arch{\_marcar\_bloqueo}, \arch{\_no\_antes\_de} \\
+C6 & Limite de concurrencia & \arch{\_semaforo = Semaphore(3)} \\
+C7 & Paginacion que sigue \arch{siguiente} & \arch{get\_all\_sensors} \\
+--- & Degradacion parcial & \arch{obtener\_lecturas} \\
+--- & Logging de cada intento & \arch{\_registrar} \\
+\bottomrule
+\end{tabular}
+\caption{Requisitos cubiertos por el cliente resiliente.}
+\end{table}
+
+\subsection{C2 - Timeout explicito}
+La lectura se acota a \textbf{2\,s} deliberadamente \emph{por debajo} de la
+lentitud simulada (4\,s): asi una respuesta lenta cuenta como \emph{timeout},
+que si es reintentable.
+
+\begin{lstlisting}[caption={Timeout separado conexion/lectura}]
+TIMEOUT_CONEXION = 2.0
+TIMEOUT_LECTURA = 2.0   # menor que los 4 s de lentitud simulada
+
+def _tiempo_timeout(timeout_seconds: float) -> httpx.Timeout:
+    return httpx.Timeout(
+        connect=TIMEOUT_CONEXION,
+        read=min(timeout_seconds, TIMEOUT_LECTURA),
+        write=timeout_seconds,
+        pool=timeout_seconds,
+    )
+\end{lstlisting}
+
+\subsection{C3 - Reintentos selectivos}
+Solo se reintentan \textbf{503}, \textbf{429} y \textbf{timeouts}. Los
+errores legitimas de cliente (400, 404) se devuelven tal cual para que la
+capa superior los traduzca (404 $\to$ 404).
+
+\begin{lstlisting}[caption={Bucle de reintentos selectivos}]
+for intento in range(1, max_intentos + 1):
+    await _esperar_turno()           # respeta el bloqueo compartido tras 429
+    try:
+        async with _semaforo:        # maximo 3 peticiones simultaneas
+            respuesta = await client.get(url, params=params, timeout=timeout)
+    except httpx.TimeoutException as exc:
+        if intento >= max_intentos:
+            raise TimeoutDependencia(...) from exc
+        espera, origen = _espera_backoff(intento, backoff_base)
+        _registrar(intento, max_intentos, "timeout", espera, origen)
+        await _dormir(espera)
+        continue
+
+    if respuesta.status_code == 429: ...
+    if respuesta.status_code == 503: ...
+
+    return respuesta   # 400, 404 y demas: NO se reintentan
+\end{lstlisting}
+
+\subsection{C4 - Backoff exponencial con \emph{full jitter}}
+La espera es aleatoria entre 0 y el tope exponencial. El jitter evita que
+muchas tareas reintenten \emph{a la vez} (efecto manada).
+
+\begin{lstlisting}[caption={Calculo de la espera (full jitter)}]
+def _espera_backoff(intento: int, base: float) -> tuple[float, str]:
+    tope = min(BACKOFF_TOPE, base * (2 ** (intento - 1)))
+    return random.uniform(0.0, tope), "backoff"
+\end{lstlisting}
+
+\subsection{C5 - \arch{Retry-After} y bloqueo compartido por IP}
+Si el servicio responde 429 con \arch{Retry-After}, esa espera
+\textbf{manda} sobre el backoff. Ademas se marca un instante global
+\arch{\_no\_antes\_de}: \emph{todas} las tareas lo respetan (el servicio
+bloquea por IP, no por peticion).
+
+\begin{lstlisting}[caption={Bloqueo global por IP}]
+_lock_espera = asyncio.Lock()
+_no_antes_de = 0.0
+
+async def _marcar_bloqueo(segundos: float) -> None:
+    global _no_antes_de
+    async with _lock_espera:
+        _no_antes_de = max(_no_antes_de, time.monotonic() + segundos)
+
+async def _esperar_turno() -> None:
+    async with _lock_espera:
+        restante = _no_antes_de - time.monotonic()
+    if restante > 0:
+        await _dormir(restante)
+\end{lstlisting}
+
+\subsection{C6 - Limite de concurrencia}
+Un semaforo evita saturar al servicio (y provocar mas 429).
+
+\begin{lstlisting}[caption={Semaforo de concurrencia}]
+_semaforo = asyncio.Semaphore(3)   # maximo 3 peticiones a la vez
+\end{lstlisting}
+
+\subsection{C7 - Paginacion con reintento por pagina}
+Se sigue \arch{siguiente} hasta \arch{null}. El reintento ocurre
+\emph{dentro de cada pagina}: que falle una no obliga a repetir todo.
+
+\begin{lstlisting}[caption={Paginacion completa}]
+async def get_all_sensors(self) -> list[Sensor]:
+    sensores: list[Sensor] = []
+    cursor: str | None = None
+    while True:
+        pagina = await self._pedir_pagina(cursor)   # reintenta por pagina
+        sensores.extend(
+            Sensor(id=crudo.id, ubicacion=crudo.ubicacion)
+            for crudo in pagina.sensores
+        )
+        if pagina.siguiente is None:
+            return sensores
+        cursor = pagina.siguiente
+\end{lstlisting}
+
+\subsection{Degradacion parcial y logging}
+\arch{obtener\_lecturas} pide varios sensores en paralelo y \textbf{no deja
+que uno malo tumbe al resto}: devuelve la dupla (lecturas ok, fallidos con
+motivo). Cada intento se registra con \arch{logging} (causa, espera y
+origen), lo que produce la evidencia de reintentos.
+
+\begin{lstlisting}[caption={Degradacion parcial}]
+resultados = await asyncio.gather(
+    *(self.obtener_lectura(sid) for sid in sensor_ids),
+    return_exceptions=True,
+)
+for sensor_id, resultado in zip(sensor_ids, resultados):
+    if isinstance(resultado, Lectura):
+        lecturas.append(resultado)
+    else:
+        fallidos.append({"sensor_id": sensor_id, "motivo": str(resultado)})
+\end{lstlisting}
+
+% =====================================================================
+\section{Cliente de la API externa (\arch{external\_api.py})}
+% =====================================================================
+
+USGS se consume con \textbf{dos llamadas encadenadas}:
+\begin{enumerate}
+  \item el \emph{feed} \arch{all\_hour} (\arch{UsgsFeed}) para hallar el
+        evento mas reciente;
+  \item el \emph{detalle} de ese evento (\arch{UsgsFeature}).
+\end{enumerate}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  font=\small, node distance=1.1cm,
+  caja/.style={rectangle, rounded corners, draw, thick, align=center,
+               minimum height=1cm, minimum width=2.6cm, fill=white},
+  >={Stealth[length=2.5mm]}
+]
+  \node[caja, fill=azul!12] (cli) {Cliente\\\scriptsize Emerson};
+  \node[caja, right=of cli] (feed) {feed all\_hour\\\scriptsize USGS};
+  \node[caja, right=of feed] (det) {detalle\\\scriptsize del evento};
+  \node[caja, right=of det, fill=verde!12] (cache) {cache TTL\\\scriptsize 300 s};
+  \draw[->, thick] (cli) -- node[above]{\scriptsize 1} (feed);
+  \draw[->, thick] (feed) -- node[above]{\scriptsize 2} (det);
+  \draw[->, thick] (det) -- (cache);
+\end{tikzpicture}
+\caption{Consulta encadenada feed $\rightarrow$ detalle, con cache TTL.}
+\label{fig:usgs}
+\end{figure}
+
+\subsection{Validacion Pydantic y el hallazgo de \arch{extra=\quot forbid\quot}}
+Los modelos de \arch{models.py} (de Nataly) declaran \arch{extra=\quot forbid\quot}.
+Pero el feed \textbf{real} de USGS trae campos adicionales
+(\arch{bbox}, \arch{tz}, \arch{sig}, \arch{magType}, \arch{felt}\ldots).
+Resultado: contra la API real, la validacion fallaba y el endpoint habria
+devuelto \textbf{502}.
+
+\textbf{Solucion dentro de mi alcance} (sin tocar \arch{models.py}): antes de
+validar, se \emph{recortan} las claves desconocidas usando los propios campos
+del modelo. Sigo validando con los modelos de Nataly, pero tolero los extras.
+
+\begin{lstlisting}[caption={Tolerancia a campos extra de USGS}]
+def _recortar(modelo: type[BaseModel], datos: dict) -> dict:
+    """Deja solo los campos que declara el modelo."""
+    return {c: v for c, v in datos.items() if c in modelo.model_fields}
+
+def _feature_normalizado(datos: dict) -> dict:
+    limpio = _recortar(UsgsFeature, datos)
+    limpio["properties"] = _recortar(UsgsProperties, datos.get("properties") or {})
+    geo = datos.get("geometry")
+    limpio["geometry"] = _recortar(UsgsGeometry, geo) if geo else None
+    return limpio
+\end{lstlisting}
+
+\subsection{Cache TTL y resultado enriquecido}
+\arch{get\_latest\_event} devuelve un \arch{ExternalResult} con el sismo, si
+fue \emph{hit} de cache y la latencia medida. \arch{usar\_cache=False} fuerza
+la llamada real (necesario para medir latencias).
+
+\begin{lstlisting}[caption={Consulta con cache TTL}]
+@dataclass(frozen=True, slots=True)
+class ExternalResult:
+    feature: UsgsFeature | None
+    cache_hit: bool
+    latency_ms: float
+
+async def get_latest_event(self, usar_cache: bool = True) -> ExternalResult:
+    inicio = time.perf_counter()
+    if usar_cache:
+        guardado = await self._cache.get(self._feed_url)
+        if guardado is not None:
+            return ExternalResult(guardado, True,
+                                  (time.perf_counter() - inicio) * 1000)
+    sismo = await _encadenar_usgs(self._client, self._feed_url, self._timeout)
+    if sismo is not None:
+        await self._cache.set(self._feed_url, sismo)
+    return ExternalResult(sismo, False, (time.perf_counter() - inicio) * 1000)
+\end{lstlisting}
+
+\subsection{C8 - Medicion de latencia (media y p95)}
+Se calienta la cache y luego se mide: \textbf{con cache} (hits) y
+\textbf{sin cache} (llamadas reales). El percentil es por
+\emph{rango mas cercano} (\emph{nearest-rank}), simple de explicar.
+
+\begin{lstlisting}[caption={Percentil y resumen de latencia}]
+def _percentil(valores: list[float], porcentaje: float) -> float:
+    if not valores:
+        return 0.0
+    ordenados = sorted(valores)
+    indice = ceil(porcentaje / 100 * len(ordenados)) - 1
+    return ordenados[max(0, min(indice, len(ordenados) - 1))]
+
+async def medir_latencia(self, muestras: int = 5):
+    await self.get_latest_event()                # calienta la cache
+    con = [(await self.get_latest_event()).latency_ms for _ in range(muestras)]
+    sin = [(await self.get_latest_event(usar_cache=False)).latency_ms
+           for _ in range(muestras)]
+    return {"con_cache": _resumen(con), "sin_cache": _resumen(sin)}
+\end{lstlisting}
+
+% =====================================================================
+\section{Pruebas automatizadas (\arch{tests/clients/})}
+% =====================================================================
+
+Se usan \textbf{pytest} + \textbf{pytest-asyncio} + \textbf{respx} (para
+simular HTTP sin red). \arch{conftest.py} limpia el estado global
+(\arch{\_no\_antes\_de}, cache de modulo) y reemplaza \arch{\_dormir} para
+medir las esperas \emph{sin dormir de verdad}.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{p{7.6cm} p{6.6cm}}
+\toprule
+\textbf{Prueba} & \textbf{Que demuestra} \\
+\midrule
+\arch{test\_503\_luego\_200\_reintenta} & Reintenta y termina en OK \\
+\arch{test\_429\_respeta\_retry\_after} & Usa \arch{Retry-After}, no el backoff \\
+\arch{test\_400\_no\_se\_reintenta} & 400 no se reintenta \\
+\arch{test\_404\_lectura\_no\_se\_reintenta} & 404 $\to$ \arch{NoEncontrado} \\
+\arch{test\_503\_persistente\_agota\_reintentos} & Agota intentos $\to$ error \\
+\arch{test\_timeout\_persistente\_...} & Timeout $\to$ \arch{TimeoutDependencia} \\
+\arch{test\_paginacion\_con\_fallo\_...} & Reintenta por pagina \\
+\arch{test\_respuesta\_invalida\_listado/lectura} & Pydantic $\to$ \arch{RespuestaInvalida} \\
+\arch{test\_degradacion\_parcial\_lecturas} & Un fallo no tumba al resto \\
+\arch{test\_salud\_y\_sensor\_existe} & \arch{salud()} y existencia \\
+\arch{test\_no\_antes\_de\_compartido} & El bloqueo por IP es global \\
+\arch{test\_lecturas\_concurrentes\_...} & Concurrencia respeta el bloqueo \\
+\midrule
+\arch{test\_encadena\_dos\_llamadas\_y\_usa\_cache} & Feed $\to$ detalle + cache \\
+\arch{test\_sin\_detalle\_devuelve\_...} & Evento sin \arch{detail} \\
+\arch{test\_feed\_invalido\_...} & Feed invalido $\to$ error \\
+\arch{test\_timeout\_lanza\_timeoutdependencia} & Timeout de USGS \\
+\arch{test\_obtener\_ultimo\_sismo\_devuelve\_hit} & Funcion de contrato \\
+\arch{test\_percentil\_y\_resumen\_latencia} & Matematica del p95 \\
+\arch{test\_medir\_latencia\_compara\_...} & Con cache: 1 llamada real \\
+\bottomrule
+\end{tabular}
+\caption{Las 20 pruebas de \arch{tests/clients/}.}
+\end{table}
+
+\begin{lstlisting}[caption={Conftest: jitter y bloqueo medidos sin dormir}, language=Python]
+@pytest.fixture
+def dormidas(monkeypatch):
+    registro: list[float] = []
+    async def falso_dormir(segundos: float) -> None:
+        registro.append(segundos)
+    monkeypatch.setattr(us, "_dormir", falso_dormir)
+    return registro
+\end{lstlisting}
+
+Resultado de correr toda la suite:
+
+\begin{lstlisting}[language=bash, caption={Salida real de pytest}]
+$ ./venv/bin/python -m pytest tests/clients -q
+....................                                                     [100%]
+20 passed in 0.20s
+\end{lstlisting}
+
+% =====================================================================
+\section{Evidencias reales}
+% =====================================================================
+
+Toda la evidencia se genera \textbf{contra el servicio real} (no simulada).
+
+\subsection{Reintentos, \arch{Retry-After} y degradacion parcial}
+Fragmento de \arch{evidencias/logs\_clients.txt}
+(\arch{--semilla 42 --tasa-fallos 0.4}). Se ve el backoff creciendo, el
+\arch{Retry-After} ganando y el 404 que \emph{no} se reintenta.
+
+\begin{lstlisting}[caption={Evidencia real de reintentos (fragmento)}]
+intento 1/5, causa=503, espera=0.170s, origen=backoff
+intento 2/5, causa=503, espera=0.564s, origen=backoff
+intento 3/5, causa=429, espera=2.000s, origen=Retry-After
+...
+GET /sensores/S-999/lectura "HTTP/1.1 404 Not Found"   <-- NO se reintenta
+
+== obtener_lecturas (degradacion parcial) ==
+  lecturas ok: 2  fallidos: 2
+  ok:      {'sensor_id': 'S-001', 'tipo': 'temperatura', 'valor': 28.3, ...}
+  fallido: {'sensor_id': 'S-003', 'motivo': '...sigue devolviendo 429...'}
+  fallido: {'sensor_id': 'S-999', 'motivo': 'No existe el sensor S-999'}
+
+== listar_sensores (recorre toda la paginacion) ==
+total sensores: 23
+\end{lstlisting}
+
+\subsection{Latencia con y sin cache (C8)}
+Corrida real contra USGS (\arch{evidencias/latencia\_cache.txt}).
+
+\begin{table}[H]
+\centering
+\begin{tabular}{l r r r}
+\toprule
+\textbf{Modo} & \textbf{Muestras} & \textbf{Media (ms)} & \textbf{p95 (ms)} \\
+\midrule
+\ok\; Con cache  & 5 & 0.002 & 0.003 \\
+\no\; Sin cache  & 5 & 479.529 & 1174.669 \\
+\bottomrule
+\end{tabular}
+\caption{Latencia de la API externa con y sin cache (5 muestras).}
+\end{table}
+
+\textbf{Lectura:} la lectura de cache es sub-milisegundo mientras que la
+llamada real ronda los 480\,ms de media (p95 $\approx$ 1.17\,s). El TTL
+reduce latencia \emph{y} carga sobre la dependencia externa.
+
+% =====================================================================
+\section{Hallazgos para el equipo (analisis)}
+% =====================================================================
+
+Estos son problemas que detecte al probar el sistema completo y que
+corresponden a otras partes:
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{p{2.4cm} p{5.4cm} p{6.4cm}}
+\toprule
+\textbf{Quien} & \textbf{Hallazgo} & \textbf{Recomendacion} \\
+\midrule
+Nataly & \arch{Sensor} sin campo \arch{tipo} y con \arch{extra=\quot forbid\quot};
+el servicio devuelve \arch{tipo}. & Agregar \arch{tipo: str | None = None} o
+relajar a \arch{extra=\quot ignore\quot}. \\
+Nataly & \arch{UsgsFeed}/\arch{UsgsProperties} con \arch{extra=\quot forbid\quot}
+vs.\ extras reales de USGS. & Cambiar a \arch{extra=\quot ignore\quot} (defensa en
+profundidad; yo ya lo tolero). \\
+Nataly & Faltan constantes del contrato y \arch{obtener\_o\_calcular} con
+\emph{single-flight}. & Alinear \arch{config.py}/\arch{cache.py} al
+contrato acordado. \\
+Daniela & \arch{NoEncontrado} cae en el 502 en vez de 404. & Agregar
+\arch{except NoEncontrado}: \arch{HTTPException(404)}. \\
+Daniela & Misma \arch{Idempotency-Key} con cuerpo distinto devuelve la
+anterior (deberia ser 422). & Guardar un hash del cuerpo y comparar. \\
+Daniela & Lock global en vez de por clave; \arch{/docs} sin
+\arch{summary}/\arch{responses}. & Lock por clave y \arch{responses=\{...\}}. \\
+Grupal & Faltan \arch{requests.http}, tabla de latencias en README, demo de
+idempotencia y deps de test. & Completar entregables. \\
+\bottomrule
+\end{tabular}
+\caption{Hallazgos y recomendaciones (fuera de mi alcance).}
+\end{table}
+
+\textbf{Evidencia del 502/504 con la config ``fuerte'':} con
+\arch{--tasa-fallos 0.4} y el \arch{max\_retries=3} de \arch{config.py}, las
+peticiones a veces agotan intentos antes que los 5 del contrato, y el
+endpoint responde 502/504. Es un sintoma de la falta de alineacion de
+constantes, no del cliente.
+
+% =====================================================================
+\section{Conclusiones}
+% =====================================================================
+
+\begin{table}[H]
+\centering
+\begin{tabular}{l l l}
+\toprule
+\textbf{Requisito} & \textbf{Estado} & \textbf{Donde} \\
+\midrule
+A1 Consumo de API externa real       & \ok & \arch{external\_api.py} \\
+A2 Validacion Pydantic               & \ok & \arch{external\_api.py} \\
+A3 Manejo de errores de la API       & \ok & \arch{external\_api.py} \\
+C2 Timeout explicito                 & \ok & \arch{unstable\_service.py} \\
+C3 Reintentos selectivos             & \ok & \arch{unstable\_service.py} \\
+C4 Backoff + jitter                  & \ok & \arch{unstable\_service.py} \\
+C5 \arch{Retry-After} + bloqueo IP   & \ok & \arch{unstable\_service.py} \\
+C6 Semaforo de concurrencia          & \ok & \arch{unstable\_service.py} \\
+C7 Paginacion resiliente             & \ok & \arch{unstable\_service.py} \\
+C8 Latencia media/p95 con y sin cache& \ok & \arch{external\_api.py} \\
+Pruebas automatizadas (20)           & \ok & \arch{tests/clients/} \\
+Evidencia real                       & \ok & \arch{evidencias/} \\
+\bottomrule
+\end{tabular}
+\caption{Estado final de mi parte.}
+\end{table}
+
+Mi parte queda \textbf{completa}: consumo resiliente de las dos
+dependencias, cache con metricas de latencia, 20 pruebas en verde y
+evidencia real. Lo pendiente esta fuera de mi alcance y se detalla en la
+seccion anterior.
+
+% =====================================================================
+\appendix
+\section{Guion sugerido para la exposicion}
+% =====================================================================
+
+\begin{enumerate}
+  \item \textbf{Contexto (30\,s):} ``una API agregadora que depende de un
+        servicio que falla y de una API publica; mi parte es sobrevivir a
+        esos fallos''.
+  \item \textbf{Arquitectura (30\,s):} mostrar la figura~\ref{fig:arq}.
+  \item \textbf{Excepciones (30\,s):} figura~\ref{fig:exc}; enfatizar la
+        compatibilidad con el router.
+  \item \textbf{Resiliencia (2--3\,min):} recorrer C2--C7 con un fragmento
+        cada uno; mencionar \emph{por que} el timeout de lectura es 2\,s
+        (menor que la lentitud simulada).
+  \item \textbf{API externa (1\,min):} encadenado feed$\to$detalle, y
+        \emph{contar el hallazgo} de \arch{extra=\quot forbid\quot} y como lo resolvi.
+  \item \textbf{Latencias (1\,min):} tabla con/sin cache
+        ($0.002$\,ms vs $479$\,ms).
+  \item \textbf{Pruebas y evidencia (1\,min):} 20 pruebas, log real.
+  \item \textbf{Hallazgos (1\,min):} tabla de recomendaciones al equipo.
+\end{enumerate}
+
+\section{Comandos de reproduccion}
+\begin{lstlisting}[language=bash, caption={Como reproducir todo}]
+# 1) Servicio inestable (lo entrega el docente; no vive en el repo)
+python servicio_inestable.py --semilla 42 --tasa-fallos 0.4
+
+# 2) Pruebas de los clientes
+./venv/bin/python -m pytest tests/clients -q
+
+# 3) Evidencia real de reintentos
+PYTHONPATH=. ./venv/bin/python tests/clients/evidencia_real.py
+
+# 4) Medicion de latencia (con y sin cache)
+PYTHONPATH=. ./venv/bin/python tests/clients/medir_latencia.py
+
+# 5) Levantar la API y ver /docs
+./venv/bin/python -m uvicorn main:app --host 127.0.0.1 --port 8000
+\end{lstlisting}
+
+\end{document}

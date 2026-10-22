@@ -14,6 +14,7 @@ from app.clients import (
     NoEncontrado,
     RespuestaInvalida,
     TimeoutDependencia,
+    UnstableServiceError,
 )
 from app.clients.unstable_service import UnstableServiceClient
 
@@ -285,3 +286,19 @@ async def test_lecturas_concurrentes_respetan_bloqueo(dormidas):
     assert len(resultados) == 3
     assert len(dormidas) >= 3
     assert all(espera >= 0.5 for espera in dormidas)
+
+
+@pytest.mark.asyncio
+async def test_error_de_conexion_es_errordependencia(dormidas):
+    """Servicio caído: se traduce a ErrorDependencia (router -> 502) sin reintentar."""
+
+    async with httpx.AsyncClient() as client:
+        with respx.mock:
+            respx.get(SENSORES_URL).mock(
+                side_effect=httpx.ConnectError("servicio caído")
+            )
+            with pytest.raises(UnstableServiceError):
+                await _cliente(client).get_all_sensors()
+
+    # Falla rápido: reintentar una conexión rechazada no aporta nada.
+    assert dormidas == []
