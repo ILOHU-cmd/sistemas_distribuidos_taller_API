@@ -8,6 +8,18 @@ API en FastAPI que combina dos dependencias externas:
 El objetivo es exponer un endpoint agregado tolerante a fallos, con timeouts,
 reintentos selectivos, caché con TTL e idempotencia en la creación de alertas.
 
+## Integrantes y roles
+
+| Integrante | Rol |
+| --- | --- |
+| Emerson | Cliente de APIs externas y resiliencia del servicio inestable |
+| Nataly | Configuracion, modelos Pydantic y cache |
+| Daniela | Endpoints propios, codigos HTTP e idempotencia |
+| Laura | Integración servicio inestable, testeo, evidencias y documentacion del proyecto |
+
+La API externa elegida es USGS. Su uso fue aprobado previamente por el docente
+como API publica alternativa al catalogo del enunciado.
+
 ## Requisitos
 
 - Python 3.11 o superior
@@ -135,6 +147,46 @@ curl -s -X POST http://localhost:8000/v1/alertas \
 ```
 
 Los mismos ejemplos están en `requests.http` para VS Code (REST Client).
+
+La demostracion reproducible de idempotencia esta en
+`tests/clients/evidencia_idempotencia.py`. La salida obtenida se conserva en
+`evidencias/idempotencia_alertas.txt`: la primera y segunda respuesta tuvieron
+estado `201` y el mismo `id`; reutilizar la clave con otro cuerpo respondio
+`422`.
+
+## Analisis de la Parte D
+
+### D.a. Riesgo de reintentar un POST sin clave de idempotencia
+
+Un timeout no permite saber si el servidor alcanzo a procesar el POST. Si el
+cliente lo reintenta sin una clave, el servidor puede crear dos alertas para un
+unico evento. `Idempotency-Key` permite reconocer la operacion original y
+devolver la misma respuesta sin repetir el efecto.
+
+### D.b. Cincuenta clientes reintentando sin jitter
+
+Los clientes podrian reintentar simultaneamente en los mismos intervalos,
+produciendo un efecto de estampida: picos de carga, mas respuestas `429` o
+`503`, y una recuperacion mas lenta de la dependencia. El backoff exponencial
+con jitter distribuye los reintentos en el tiempo.
+
+### D.c. Desactualizacion aceptable de la cache
+
+El TTL configurado es de 300 segundos, por lo que un resultado puede tener
+hasta aproximadamente cinco minutos de antiguedad, ademas del tiempo de
+propagacion de la respuesta. Es aceptable para un resumen de monitoreo, pero
+seria inaceptable para decisiones de emergencia, cobros, controles de seguridad
+o cualquier dato que deba reflejar el estado actual. En esos casos se deberia
+reducir el TTL, invalidar explicitamente o consultar sin cache.
+
+### D.d. Ejecucion detras de un balanceador
+
+La cache y el almacen de idempotencia actuales viven en la memoria de cada
+proceso. Con varias replicas, dos peticiones con la misma clave podrian llegar
+a procesos distintos y crear efectos duplicados. Se necesitaria un almacen
+compartido, por ejemplo Redis o una base de datos con restriccion unica para la
+clave, ademas de una cache compartida o distribuida. Los locks locales no son
+suficientes entre replicas.
 
 ## Estructura
 

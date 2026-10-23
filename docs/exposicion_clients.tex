@@ -691,8 +691,10 @@ reduce latencia \emph{y} carga sobre la dependencia externa.
 \section{Hallazgos para el equipo (analisis)}
 % =====================================================================
 
-Estos son problemas que detecte al probar el sistema completo y que
-corresponden a otras partes:
+Estos hallazgos corresponden a una version intermedia del proyecto. Se
+conservan como trazabilidad de la auditoria, pero fueron corregidos en la
+integracion actual; los pendientes documentales se completaron en el README y
+en los scripts de evidencia.
 
 \begin{table}[H]
 \centering
@@ -756,10 +758,11 @@ Evidencia real                       & \ok & \arch{evidencias/} \\
 \caption{Estado final de mi parte.}
 \end{table}
 
-Mi parte queda \textbf{completa}: consumo resiliente de las dos
-dependencias, cache con metricas de latencia, 20 pruebas en verde y
-evidencia real. Lo pendiente esta fuera de mi alcance y se detalla en la
-seccion anterior.
+La integracion queda completa: consumo resiliente de las dos dependencias,
+cache con metricas de latencia, pruebas automatizadas y evidencia real. La
+version actual tambien incluye integrantes y roles, el analisis de la Parte D
+y una demostracion reproducible de idempotencia en
+\arch{tests/clients/evidencia\_idempotencia.py}.
 
 % =====================================================================
 \appendix
