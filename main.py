@@ -39,7 +39,17 @@ async def lifespan(app: FastAPI):
         await client.aclose()
 
 
-app = FastAPI(title="Agregador Resiliente de APIs", version="1.0.0", lifespan=lifespan)
+app = FastAPI(
+    title="Agregador Resiliente de APIs",
+    version="1.0.0",
+    description=(
+        "Combina el feed de sismos de USGS con sensores de un servicio local inestable "
+        "y permite crear alertas idempotentes. Los errores se devuelven como "
+        "`{\"detail\": \"...\"}`."
+    ),
+    servers=[{"url": "http://localhost:8000", "description": "Ejecución local"}],
+    lifespan=lifespan,
+)
 app.include_router(agregador.router)
 app.include_router(alertas.router)
 

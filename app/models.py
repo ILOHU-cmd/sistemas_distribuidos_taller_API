@@ -71,7 +71,31 @@ class RiskMonitoringResponse(StrictModel):
     sensores: list[Sensor]
 
 
+class ErrorResponse(BaseModel):
+    """Cuerpo de error devuelto por la API."""
+
+    detail: str | list[dict[str, Any]] = Field(
+        description="Mensaje de error, o lista de errores de validación en un 422",
+        examples=["Una dependencia excedió el tiempo total permitido"],
+    )
+
+
 class AlertRequest(StrictModel):
+    model_config = ConfigDict(
+        strict=True,
+        extra="forbid",
+        json_schema_extra={
+            "examples": [
+                {
+                    "sensor_id": "S-001",
+                    "tipo": "temperatura",
+                    "mensaje": "Valor fuera de rango",
+                    "severidad": "alta",
+                }
+            ]
+        },
+    )
+
     sensor_id: StrictStr = Field(min_length=1)
     tipo: StrictStr = Field(min_length=1)
     mensaje: StrictStr = Field(min_length=1)

@@ -7,7 +7,7 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Header, HTTPException, Request, status
 
-from app.models import AlertRequest, AlertResponse
+from app.models import AlertRequest, AlertResponse, ErrorResponse
 
 router = APIRouter(prefix="/v1", tags=["alertas"])
 
@@ -18,15 +18,26 @@ router = APIRouter(prefix="/v1", tags=["alertas"])
     status_code=status.HTTP_201_CREATED,
     summary="Crea una alerta de forma idempotente",
     responses={
-        422: {"description": "La misma Idempotency-Key fue reutilizada con un cuerpo diferente"},
-        502: {"description": "Error de dependencia externa"},
-        504: {"description": "Tiempo de espera agotado"},
+        422: {
+            "model": ErrorResponse,
+            "description": "Falta la cabecera Idempotency-Key, el cuerpo es inválido "
+            "o la misma clave fue reutilizada con un cuerpo diferente",
+        },
+        502: {"model": ErrorResponse, "description": "Error de dependencia externa"},
+        504: {"model": ErrorResponse, "description": "Tiempo de espera agotado"},
         }
     )
 async def crear_alerta(
     payload: AlertRequest,
     request: Request,
-    idempotency_key: str = Header(..., alias="Idempotency-Key", min_length=1),
+    idempotency_key: str = Header(
+        ...,
+        alias="Idempotency-Key",
+        min_length=1,
+        description="Clave única por operación. Repetirla con el mismo cuerpo devuelve "
+        "la misma alerta (201) sin crear otra; con otro cuerpo responde 422.",
+        examples=["demo-key-001"],
+    ),
 ) -> AlertResponse:
     """Procesa una clave una sola vez y devuelve exactamente el resultado guardado."""
 

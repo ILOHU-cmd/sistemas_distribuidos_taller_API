@@ -1,0 +1,12 @@
+### Evidencia D1-D2: idempotencia de POST /v1/alertas
+### Fecha: 2026-10-23
+### Comando: python tests/clients/evidencia_idempotencia.py
+
+primera: HTTP 201
+{"creada_en": "2026-10-23T14:11:30.377607Z", "id": "b5d6d493-8a52-4b4a-a4db-83163cb04d99", "mensaje": "Umbral", "sensor_id": "S-001", "severidad": "alta", "tipo": "temperatura"}
+segunda: HTTP 201
+{"creada_en": "2026-10-23T14:11:30.377607Z", "id": "b5d6d493-8a52-4b4a-a4db-83163cb04d99", "mensaje": "Umbral", "sensor_id": "S-001", "severidad": "alta", "tipo": "temperatura"}
+misma clave y cuerpo diferente: HTTP 422
+{"detail": "La Idempotency-Key ya fue utilizada con un cuerpo diferente"}
+
+RESULTADO: idempotencia verificada
