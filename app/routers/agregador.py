@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from app.clients.external_api import ExternalApiError, ExternalEarthquakeClient
 from app.clients.unstable_service import NoEncontrado, UnstableServiceError
-from app.models import RiskMonitoringResponse
+from app.models import ErrorResponse, RiskMonitoringResponse
 
 router = APIRouter(prefix="/v1", tags=["monitoreo"])
 
@@ -18,9 +18,9 @@ router = APIRouter(prefix="/v1", tags=["monitoreo"])
     response_model=RiskMonitoringResponse,
     summary="Monitoreo de riesgo sísmico",
     responses={
-        404: {"description": "Recurso no encontrado"},
-        502: {"description": "Error no recuperable en dependencia externa"},
-        504: {"description": "Tiempo de espera agotado en dependencia externa"},
+        404: {"model": ErrorResponse, "description": "Recurso no encontrado"},
+        502: {"model": ErrorResponse, "description": "Error no recuperable en dependencia externa"},
+        504: {"model": ErrorResponse, "description": "Tiempo de espera agotado en dependencia externa"},
         }
     )
 async def monitoreo_riesgo(request: Request) -> RiskMonitoringResponse:

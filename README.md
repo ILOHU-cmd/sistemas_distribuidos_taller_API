@@ -188,10 +188,60 @@ compartido, por ejemplo Redis o una base de datos con restriccion unica para la
 clave, ademas de una cache compartida o distribuida. Los locks locales no son
 suficientes entre replicas.
 
+## Contrato OpenAPI
+
+El contrato que compartimos con otros grupos está en
+[`docs/openapi.json`](docs/openapi.json). Se regenera desde el código con:
+
+```bash
+PYTHONPATH=. python scripts/exportar_openapi.py
+```
+
+Con la API en ejecución también está en `http://localhost:8000/openapi.json`
+(Swagger UI en `/docs`). Incluye ejemplos de cuerpo, la descripción de la
+cabecera `Idempotency-Key` y el esquema `ErrorResponse` (`{"detail": ...}`)
+para los códigos `404`, `422`, `502` y `504`.
+
+## Consumo del contrato de otro grupo
+
+Consumimos el endpoint `<MÉTODO> <ruta>` del grupo **<nombre del grupo>**
+usando **únicamente** su documentación OpenAPI (`<archivo o URL del contrato>`),
+sin revisar su código ni preguntarles por otros medios.
+
+Petición realizada:
+
+```bash
+curl -i -X <MÉTODO> <URL_BASE>/<ruta>   -H "Content-Type: application/json"   -d '<cuerpo según el contrato>'
+```
+
+Respuesta obtenida: `<código HTTP>` — `<resumen del cuerpo>`.
+
+### Lo que le faltó al contrato
+
+| Aspecto | Qué esperábamos encontrar | Impacto al consumirlo |
+| --- | --- | --- |
+| <p. ej. códigos de error> | <p. ej. esquema de la respuesta 503> | <p. ej. no sabíamos si reintentar> |
+| <p. ej. ejemplos> | <p. ej. ejemplo de cuerpo válido> | <p. ej. varios 422 hasta acertar el formato> |
+| <p. ej. cabeceras> | <p. ej. `Retry-After`, autenticación> | <...> |
+
+### Lo que le sobró al contrato
+
+| Aspecto | Qué sobraba | Por qué |
+| --- | --- | --- |
+| <p. ej. endpoint interno expuesto> | <...> | <p. ej. no es útil para el consumidor> |
+| <p. ej. campos de respuesta> | <...> | <p. ej. nunca llegan o siempre son `null`> |
+
+### Diferencias entre contrato y comportamiento real
+
+- <p. ej. el contrato dice `200`, pero el servicio responde `201`>
+- <p. ej. un campo marcado como requerido llega vacío>
+
 ## Estructura
 
 ```text
 main.py                     # App FastAPI, lifespan y manejo de errores
+scripts/exportar_openapi.py # Exporta el contrato a docs/openapi.json
+docs/openapi.json           # Contrato OpenAPI para compartir
 app/
   config.py                 # Configuración validada con pydantic-settings
   models.py                 # Modelos Pydantic (USGS, sensores, alertas)

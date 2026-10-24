@@ -1,0 +1,583 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Agregador Resiliente de APIs",
+    "description": "Combina el feed de sismos de USGS con sensores de un servicio local inestable y permite crear alertas idempotentes. Los errores se devuelven como `{\"detail\": \"...\"}`.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8000",
+      "description": "Ejecución local"
+    }
+  ],
+  "paths": {
+    "/v1/monitoreo-riesgo": {
+      "get": {
+        "tags": [
+          "monitoreo"
+        ],
+        "summary": "Monitoreo de riesgo sísmico",
+        "description": "Combina ambas dependencias; traduce fallos de dependencia a 502/504.",
+        "operationId": "monitoreo_riesgo_v1_monitoreo_riesgo_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RiskMonitoringResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso no encontrado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Error no recuperable en dependencia externa",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Tiempo de espera agotado en dependencia externa",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/alertas": {
+      "post": {
+        "tags": [
+          "alertas"
+        ],
+        "summary": "Crea una alerta de forma idempotente",
+        "description": "Procesa una clave una sola vez y devuelve exactamente el resultado guardado.",
+        "operationId": "crear_alerta_v1_alertas_post",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Clave única por operación. Repetirla con el mismo cuerpo devuelve la misma alerta (201) sin crear otra; con otro cuerpo responde 422.",
+              "examples": [
+                "demo-key-001"
+              ],
+              "title": "Idempotency-Key"
+            },
+            "description": "Clave única por operación. Repetirla con el mismo cuerpo devuelve la misma alerta (201) sin crear otra; con otro cuerpo responde 422."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AlertRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Falta la cabecera Idempotency-Key, el cuerpo es inválido o la misma clave fue reutilizada con un cuerpo diferente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Error de dependencia externa",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Tiempo de espera agotado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/salud": {
+      "get": {
+        "tags": [
+          "sistema"
+        ],
+        "summary": "Salud",
+        "operationId": "salud_salud_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Salud Salud Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AlertRequest": {
+        "properties": {
+          "sensor_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Sensor Id"
+          },
+          "tipo": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Tipo"
+          },
+          "mensaje": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Mensaje"
+          },
+          "severidad": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Severidad"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "sensor_id",
+          "tipo",
+          "mensaje",
+          "severidad"
+        ],
+        "title": "AlertRequest",
+        "examples": [
+          {
+            "mensaje": "Valor fuera de rango",
+            "sensor_id": "S-001",
+            "severidad": "alta",
+            "tipo": "temperatura"
+          }
+        ]
+      },
+      "AlertResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "sensor_id": {
+            "type": "string",
+            "title": "Sensor Id"
+          },
+          "tipo": {
+            "type": "string",
+            "title": "Tipo"
+          },
+          "mensaje": {
+            "type": "string",
+            "title": "Mensaje"
+          },
+          "severidad": {
+            "type": "string",
+            "title": "Severidad"
+          },
+          "creada_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Creada En"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "sensor_id",
+          "tipo",
+          "mensaje",
+          "severidad",
+          "creada_en"
+        ],
+        "title": "AlertResponse"
+      },
+      "ErrorResponse": {
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            ],
+            "title": "Detail",
+            "description": "Mensaje de error, o lista de errores de validación en un 422",
+            "examples": [
+              "Una dependencia excedió el tiempo total permitido"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "detail"
+        ],
+        "title": "ErrorResponse",
+        "description": "Cuerpo de error devuelto por la API."
+      },
+      "RiskMonitoringResponse": {
+        "properties": {
+          "generado_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generado En"
+          },
+          "latencia_ms": {
+            "type": "number",
+            "title": "Latencia Ms"
+          },
+          "cache_hit": {
+            "type": "boolean",
+            "title": "Cache Hit"
+          },
+          "sismo": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UsgsFeature"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sensores": {
+            "items": {
+              "$ref": "#/components/schemas/Sensor"
+            },
+            "type": "array",
+            "title": "Sensores"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "generado_en",
+          "latencia_ms",
+          "cache_hit",
+          "sismo",
+          "sensores"
+        ],
+        "title": "RiskMonitoringResponse"
+      },
+      "Sensor": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "tipo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tipo"
+          },
+          "nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nombre"
+          },
+          "valor": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valor"
+          },
+          "unidad": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unidad"
+          },
+          "estado": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estado"
+          },
+          "ubicacion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ubicacion"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "title": "Sensor",
+        "description": "Representa un sensor devuelto por el servicio inestable."
+      },
+      "UsgsFeature": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "properties": {
+            "$ref": "#/components/schemas/UsgsProperties"
+          },
+          "geometry": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UsgsGeometry"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "id",
+          "properties"
+        ],
+        "title": "UsgsFeature"
+      },
+      "UsgsGeometry": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "coordinates": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Coordinates"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "coordinates"
+        ],
+        "title": "UsgsGeometry"
+      },
+      "UsgsProperties": {
+        "properties": {
+          "mag": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mag"
+          },
+          "place": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Place"
+          },
+          "time": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Time"
+          },
+          "updated": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "tsunami": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tsunami"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "title": "UsgsProperties"
+      }
+    }
+  }
+}
